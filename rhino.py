@@ -9,7 +9,7 @@ from rhino_helper import progressBar
 
 ## TODO:
 # - Levels as class?
-# - Coverage as class?
+# - generate common id for atoms
 
 
 class Datacube:
@@ -44,9 +44,26 @@ class Datacube:
         Datacube.dataset = gdal.Open('demodata/demolayer_lowres.tif')
         
         ## TODO: account for different bands
+
+        #
+        # Note there are some special treatments since this is the loading procedure (hen-egg problem). Do not 
+        # do this somewhere else. Basically it avoids that the atoms have to be created multiple times. The numpy array 
+        # should not be further exposed to the user as the theory says it is actually a field of atoms.
+        #
         band = Datacube.dataset.GetRasterBand(1)
-        self.__datacube_coverage.append(numpy.array(band.ReadAsArray()))
+        initial_coverage = Coverage(Datacube.dataset.RasterXSize, Datacube.dataset.RasterYSize, Datacube.dataset.GetGeoTransform())
+        initial_coverage.create(array = numpy.array(band.ReadAsArray()))
+        self.__datacube_coverage.append(initial_coverage)
         self.createObjectView(0)
+
+        #
+        # Use the atoms created by the object view for now
+        #
+        atoms = []
+        for o in self.__datacube_objects[0]:
+            atoms.append(o.getAtoms()[0]) #there is only one atom per object now
+        self.__datacube_coverage[0].create(atoms = atoms)
+
         #
         # Set default neighbourhood concept
         #
@@ -65,7 +82,9 @@ class Datacube:
         #
         object_list = []
 
+        # TODO: get this from coverage class
         (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size) = Datacube.dataset.GetGeoTransform()
+
 
         #
         # Iterate through all pixels and create an atom from it. Then, create an object for each atom.
@@ -79,7 +98,7 @@ class Datacube:
 
         progressBar(counter, size, prefix = 'Generate object view:', suffix = 'Complete', length = 50)
         
-        for (x_index, y_index), value in numpy.ndenumerate(self.__datacube_coverage[from_level]):
+        for (x_index, y_index), value in numpy.ndenumerate(self.__datacube_coverage[from_level].getStupidArray()):
             
             #
             # Extract coordinates, properties and values from atoms
@@ -88,7 +107,7 @@ class Datacube:
             y_coord = y_index * y_size + upper_left_y + (y_size / 2) #to centre the point
             # TODO: add time
             property = "class"
-            value = int(self.__datacube_coverage[from_level][x_index, y_index]) ## TODO: remove int
+            value = int(value) ## TODO: remove int, this is due to the demo data
 
             #
             # Create an object and fill it with the atom
@@ -315,27 +334,49 @@ class Atom:
 
 class Coverage:
 
-    def __init__(self):
+    def __init__(self, x_size, y_size, geotransform):
         self.id = id(self)
         self.coverage = [[]]
+        self.__numpyarray = None
+        self.geotransform = geotransform
+
+        for x in range(x_size):
+            self.coverage.append([])
+            for y in range(y_size):
+                self.coverage[x].append(None)
     
-    def create(self, atoms):
+    def create(self, atoms = None, array = None):
         """
         Creates the coverage (create as in "creation" by god), don't confuse with
         initialisation. It takes a list of atoms and puts it into a coverage.
 
+        One of the following parameters has to be set.
         :param atoms: list of atoms
+        :param array: numpy array
         """
-        for atom in atoms:
-            x,y = atom.getIndex()
-            self.coverage[x][y] = atom
+        if atoms is None and array is None:
+            raise Exception("Coverage creation failed")
+
+        if atoms is not None:
+            for atom in atoms:
+                x,y = atom.getIndex()
+                self.coverage[x][y] = atom
+
+        if array is not None:
+            self.__numpyarray = array
 
     def getCoverage(self, boundingbox):
         if boundingbox is None:
             return self.coverage
         else:
             return self.coverage
-            
+    
+    def getStupidArray(self):
+        return self.__numpyarray
+
+    def getMetadata(self):
+        return self.geotransform
+
 class Object:
 
     def __init__(self):
