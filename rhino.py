@@ -1,6 +1,7 @@
 import gdal
 import numpy
 import shapely
+import shapely.geometry as geometry
 import math
 
 class Datacube:
@@ -168,8 +169,9 @@ class Atom:
             "id": id(self),
             "lat": coordinates["lat"],
             "lon": coordinates["lon"],
+            "geometry": geometry.Point(coordinates["lat"],coordinates["lon"]),
             "property": observation["property"],
-            "value": observation["value"]
+            "value": observation["value"],
         }
 
     def getID(self):
@@ -229,6 +231,9 @@ class Atom:
         """        
         return (self.__tuple["lat"], self.__tuple["lon"])
     
+    def getGeometry(self):
+        return self.__tuple["geometry"]
+
     def print(self):
         print(self.__tuple)
 
@@ -253,11 +258,21 @@ class Object:
         self.__calculateGeoAttributes()
 
     def grow(self, atoms):
+        """
+        Grows the object with the given atomes
+
+        :param atoms: list of atoms
+        """
         self.atoms.extend(atoms)
 #        self.__calculateAlphaShape(3)
         self.__calculateGeoAttributes()
 
     def shrink(self, atoms):
+        """
+        Shrinks the object by the given atomes
+
+        :param atoms: list of atoms
+        """        
         pass
 
     def __calculateAlphaShape(self, neighbors):
@@ -269,7 +284,14 @@ class Object:
         ## TODO: Handle case where not enough atoms are available for that polygon
 
     def __calculateGeoAttributes(self):
+
         self.attributes["derived"]["number_of_atoms"] = len(self.atoms)
+
+        points = []
+        for a in self.atoms:
+            points.append(a.getGeometry())
+
+        self.attributes["derived"]["boundingbox"] = geometry.MultiPoint(list(points)).envelope
 
     def getAtoms(self):
         """
@@ -298,6 +320,9 @@ class Object:
             coordinates.append(a.getCoordinates())
         return coordinates
 
+    def getBoundinBox(self):
+        return self.attributes["derived"]["boundingbox"]
+        
     def linksWithObjects(self, link_type, candidate):
         """
         Creates a link to an object candidate.
@@ -379,6 +404,8 @@ class Link:
             
             self.__new_objects = self.__aggregate(objects, Datacube.neighbourhood)
 
+            #self.__new_objects = self.__demo_aggregate2(objects)
+
             # demo_array = self.__demo_aggregate(objects)
             # print("end clustering")
             # for atoms in demo_array:
@@ -455,7 +482,7 @@ class Link:
                     # Grow the current object
                     #
                     temp_obj.grow(cand.getAtoms())
-
+                    print("object # "+ str(list_pos) +" grows. Size is now " + str(temp_obj.getNumberOfAtoms()))
                     #
                     # delete the candidate from the list
                     #
@@ -508,6 +535,18 @@ class Link:
         
         print (len(atom_list))
         return atom_list
+    
+    def __demo_aggregate2(self, objects):
+        np_arr = []
+        at_arr = []
+        for o in objects:
+            atoms = o.getAtoms()
+            for a in atoms:
+                at_arr.append(a)
+                np_arr.append([a.getLatitude(), a.getLongitude()])
+
+        for (x_index, y_index), value in numpy.ndenumerate(np_arr):
+            print (str(x_index) + "/" + str(y_index) + ":"+ str(value))
 
     def getObjects(self):
         """
@@ -555,26 +594,32 @@ class Neighbourhood:
         """                
         min_dist = float("inf")
 
-        obj_atoms = object.getAtoms()
-        cand_atoms = candidate.getAtoms()
-
-        for a1 in obj_atoms:
-            for a2 in cand_atoms:
-                dist = math.hypot(a1.getLatitude() - a2.getLatitude(), a1.getLongitude() - a2.getLongitude())
-                if dist < min_dist:
-                    min_dist = dist
-
-        ## TODO: Account for different grains in X and Y direction
-
         #
         # Get allowed distance
         #
+        ## TODO: Account for different grains in X and Y direction
         allowed_dist = max(Datacube.getDatasetMetadata(Datacube)["coverage_x_grain"], Datacube.getDatasetMetadata(Datacube)["coverage_y_grain"])
 
         #
         # add tolerance
         #
         allowed_dist += self.tolerance
+
+        obj_atoms = object.getAtoms()
+        cand_atoms = candidate.getAtoms()
+
+        #
+        # Check the bounding boxes at first. If their distance is larger than the allowed distance
+        # it is impossible that the object's distance is smaller than the allowed distance
+        #
+        if object.getBoundinBox().distance(candidate.getBoundinBox()) < allowed_dist:
+            for a1 in obj_atoms:
+                for a2 in cand_atoms:
+                    dist = a1.getGeometry().distance(a2.getGeometry())
+                    if dist < min_dist:
+                        min_dist = dist
+        else:
+            return False
 
         #
         # Check whether the detected distance is smaller than the allowed distance
