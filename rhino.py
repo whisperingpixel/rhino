@@ -1,6 +1,7 @@
 import gdal
 import numpy
 import shapely
+import math
 
 class Datacube:
 
@@ -14,10 +15,13 @@ class Datacube:
         "modelled": []
     }
 
+    neighbourhood = None
+
     def __init__(self):
         self.__dataset = None
         self.__datacube_coverage = []
         self.__datacube_objects = []
+
 
     def load(self, boundingbox):
         """
@@ -30,6 +34,11 @@ class Datacube:
         self.__dataset = gdal.Open('demodata/demolayer.tif')
         band = self.__dataset.GetRasterBand(1)
         self.__datacube_coverage = numpy.array(band.ReadAsArray())
+
+        #
+        # Set default neighbourhood concept
+        #
+        Datacube.neighbourhood = Neighbourhood("4-connected")
 
 
     def createObjectView(self, layer):
@@ -72,6 +81,28 @@ class Datacube:
         """        
         pass
 
+    def getDatasetMetadata(self):
+        """
+        Returns the metadata of the selected dataset.
+
+        :return: dict
+        """
+        gt = self.__dataset.GetGeoTransform()
+        metadata = {
+            "coverage_x_size": self.__dataset.RasterXSize,
+            "coverage_y_size": self.__dataset.RasterYSize,
+            "coverage_x_grain": gt[1],
+            "coverage_y_grain": gt[5]
+        }
+
+        return metadata
+
+    ## TODO: This is currently not possible as switching to another neighbourhood
+    #        would invalidate existing object links.
+    #def setNeighbourhoodConcept(self, concept):
+    #    neighbourhood = Neighbourhood(concept)
+    
+
     #
     # These are user-friendly wrapper-functions
     #
@@ -91,7 +122,7 @@ class Datacube:
         return objects
 
 
-    def aggregateObjectsByCondition(self, condition, aggregation_function):
+    def aggregateObjects(self, condition):
         """
         Aggregates objects based on a certain condition.
 
@@ -110,10 +141,9 @@ class Datacube:
         # Aggregate/cluster the objects using the object link
         # class.
         #
-        l = Link("aggregate", objects, None, True)
-        aggregated_objects = l.getObjects()
-        for agg in aggregated_objects:
-            agg.print()
+        l = Link("aggregate", objects, True)
+        for o in l.getObjects():
+            o.print()
 
 
     def executeQuery(self, command):
@@ -218,6 +248,14 @@ class Object:
         self.atoms = atoms
 #        self.__calculateAlphaShape(3)
         self.__calculateGeoAttributes()
+
+    def grow(self, atoms):
+        self.atoms.extend(atoms)
+#        self.__calculateAlphaShape(3)
+        self.__calculateGeoAttributes()
+
+    def shrink(self, atoms):
+        pass
 
     def __calculateAlphaShape(self, neighbors):
         
@@ -327,30 +365,28 @@ class Object:
 
 class Link:
 
-    def __init__(self, link_type, objects, condition, mutual):
+    def __init__(self, link_type, objects,  mutual):
         self.id = id(self)
         self.attributes = {"derived":{}}
         self.attributes["derived"]["link_type"] = link_type
 
+        self.__new_objects = []
+
         if link_type == "aggregate":
+            
+            self.__new_objects = self.__aggregate(objects, Datacube.neighbourhood)
 
-            print("start clusering")
-            demo_array = self.__demo_aggregate(objects)
-            print("end clustering")
+            # demo_array = self.__demo_aggregate(objects)
+            # print("end clustering")
+            # for atoms in demo_array:
+            #     #atoms = []
+            #     #for o in objects:
+            #     #    atoms.extend(o.getAtoms())
 
-            self.__new_objects = []
+            #     new_o = Object()
+            #     new_o.create(atoms)
 
-            for atoms in demo_array:
-                #atoms = []
-                #for o in objects:
-                #    atoms.extend(o.getAtoms())
-
-                ## TODO: use condition
-
-                new_o = Object()
-                new_o.create(atoms)
-
-                self.__new_objects.append(new_o)
+            #     self.__new_objects.append(new_o)
 
         else:
             if len(object != 2):
@@ -363,6 +399,85 @@ class Link:
             if mutual == True:
                 candidate.linksWithObjects(link_type, target)
 
+    def __aggregate(self, objects, neighbourhood):
+
+        print ("aggregate with "+ str(neighbourhood.getConcept()) + " neighbourhood definition.")
+
+        #
+        # Position of the list, initial starting point will be 0
+        #
+        list_pos = 0
+
+        #
+        # As we are juggling with the object list, make a copy of it
+        #
+        aggregates = objects.copy()
+        final_aggregates = []
+
+        #
+        # Get the first object
+        #
+        temp_obj = aggregates[0]
+        #
+        # Remove this object from the list, so that it will not be used for neighborhood estimation
+        #
+        del aggregates[0]
+
+        #
+        # Iterate through the list of aggregates
+        #
+        while len(aggregates) > 0:
+            print("Iteration # " + str(list_pos))
+
+
+            #
+            # Set a flag whether we found something or not
+            #
+            aggregated = False
+
+            #
+            # Iterate through the other objects
+            #
+            for i,cand in enumerate(aggregates):
+                
+                #
+                # If the object is neighbour
+                #
+                if neighbourhood.isNeighbour(temp_obj, cand):
+
+                    #
+                    # Grow the current object
+                    #
+                    temp_obj.grow(cand.getAtoms())
+                    print("object size grows and is now: " + str(temp_obj.getNumberOfAtoms()))
+                    #
+                    # delete the candidate from the list
+                    #
+                    del aggregates[i]
+
+                    #
+                    # Set the flag that a neighbour has been found
+                    #
+                    aggregated = True
+
+            if aggregated == False:
+
+                #
+                # put the object back in the list if we are finished
+                #
+                final_aggregates.append(temp_obj)
+
+                #
+                # increase list position if we did not find neighbours
+                #                
+                list_pos += 1
+
+                #
+                # Get the next object
+                #
+                temp_obj = aggregates[0]                
+
+        return final_aggregates
 
     def __demo_aggregate(self, objects):
 
@@ -403,3 +518,48 @@ class Link:
         :return: int
         """                
         return self.id
+
+class Neighbourhood:
+
+    def __init__(self, concept):
+
+        if concept in ["raster_4", "4-connected", "raster_8", "moore", "8-connected"]:
+            self.concept = concept
+        else:
+            raise Exception("Neighborhood concept " + str(concept) + " not implemented")
+    
+    def getConcept(self):
+        return self.concept
+
+    def isNeighbour(self, object, candidate):
+
+        min_dist = float("inf")
+
+        obj_atoms = object.getAtoms()
+        cand_atoms = candidate.getAtoms()
+
+        for a1 in obj_atoms:
+            for a2 in cand_atoms:
+                dist = math.hypot(a1.getLatitude() - a2.getLatitude(), a1.getLongitude() - a2.getLongitude())
+                if dist < min_dist:
+                    min_dist = dist
+
+        ## TODO: Account for different grains in X and Y direction
+
+        #
+        # Get allowed distance
+        #
+        allowed_dist = max(Datacube.getDatasetMetadata(Datacube)["coverage_x_grain"] + Datacube.getDatasetMetadata(Datacube)["coverage_y_grain"])
+
+        #
+        # add tolerance
+        #
+        allowed_dist += 0.001
+
+        #
+        # Check whether the detected distance is smaller than the allowed distance
+        #
+        if min_dist < allowed_dist: ##TODO: this is for testing
+            return True
+        else:
+            return False
