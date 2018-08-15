@@ -24,9 +24,8 @@ class Datacube:
     neighbourhood = None
 
     def __init__(self):
-        self.__datacube_coverage = None
-        self.__datacube_objects = None
-
+        self.__datacube_coverage = []
+        self.__datacube_objects = []
 
     def load(self, boundingbox):
         """
@@ -40,15 +39,15 @@ class Datacube:
         
         ## TODO: account for different bands
         band = Datacube.dataset.GetRasterBand(1)
-        self.__datacube_coverage = numpy.array(band.ReadAsArray())
-
+        self.__datacube_coverage.append(numpy.array(band.ReadAsArray()))
+        self.createObjectView(0)
         #
         # Set default neighbourhood concept
         #
         Datacube.neighbourhood = Neighbourhood("4-connected")
 
 
-    def createObjectView(self, layer):
+    def createObjectView(self, from_level):
         """
         Creates the object view in the rhino datacube.
 
@@ -58,7 +57,7 @@ class Datacube:
         #
         # Init an empty object view
         #
-        self.__datacube_objects = []
+        object_list = []
 
         (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size) = Datacube.dataset.GetGeoTransform()
 
@@ -74,7 +73,7 @@ class Datacube:
 
         progressBar(counter, size, prefix = 'Generate object view:', suffix = 'Complete', length = 50)
         
-        for (x_index, y_index), value in numpy.ndenumerate(self.__datacube_coverage):
+        for (x_index, y_index), value in numpy.ndenumerate(self.__datacube_coverage[from_level]):
             
             #
             # Extract coordinates, properties and values from atoms
@@ -83,35 +82,37 @@ class Datacube:
             y_coord = y_index * y_size + upper_left_y + (y_size / 2) #to centre the point
             # TODO: add time
             property = "class"
-            value = int(self.__datacube_coverage[x_index, y_index]) ## TODO: remove int
+            value = int(self.__datacube_coverage[from_level][x_index, y_index]) ## TODO: remove int
 
             #
             # Create an object and fill it with the atom
             #
             o = Object()
             o.create([Atom({"lat": x_coord, "lon": y_coord},{"property": property, "value": value},{"x":x_index,"y":y_index})])
-            self.__datacube_objects.append(o)
+            
+            object_list.append(o)
 
             counter += 1
             progressBar(counter, size, prefix = 'Generate object view:', suffix = 'Complete', length = 50)
+    
+        self.__datacube_objects.append(object_list)
 
-
-    def createCoverageView(self, objects):
+    def createCoverageView(self, from_level):
         """
         Creates the coverage view in the rhino datacube.
 
         :param objects: list of objects
         """
-        new_coverage = numpy.array(self.__datacube_coverage, copy=True)
+        new_coverage = numpy.array(self.__datacube_coverage[0], copy=True)
         new_coverage = new_coverage * 0
 
-        for o in objects:
+        for o in self.__datacube_objects[from_level]:
             for a in o.getAtoms():
                 x,y = a.getIndex()
                 value = a.getObservationValue()
                 new_coverage[x][y] = value
 
-        self.__datacube_coverage = new_coverage
+        self.__datacube_coverage.append(new_coverage)
 
     def getDatasetMetadata(self):
         """
@@ -138,7 +139,7 @@ class Datacube:
     #
     # These are user-friendly wrapper-functions
     #
-    def selectObjectsByCondition(self, condition):
+    def selectObjectsByCondition(self, from_level, condition):
         """
         Select the objects in the object view of the rhino datacube, which match
         a certain condition.
@@ -147,30 +148,43 @@ class Datacube:
         :return: list of objects
         """        
         objects = []
-        candidates = self.__datacube_objects
+        candidates = self.__datacube_objects[from_level]
         for obj in candidates:
             if obj.getAttributeValue("class") == 1:
                 objects.append(obj)
         return objects
 
 
-    def aggregateObjects(self, condition):
+    def aggregateObjects(self, from_level, condition):
         """
         Aggregates objects based on a certain condition.
 
         :param condition: ?
         :return: ?
-        """      
+        """
+
         #
         # Get all objects, which match the condition. If no objects
         # match the condition, return here.
         #
-        objects = self.selectObjectsByCondition(condition)
+        objects = self.selectObjectsByCondition(from_level, condition)
         if len(objects) == 0:
             return
 
+        #
+        # Increment level by 1
+        #
+        level = from_level + 1
 
-        self.createCoverageView(objects)
+        #
+        # create object view
+        #
+        self.__datacube_objects.append(objects)
+
+        #
+        # Create coverage view.
+        #
+        self.createCoverageView(level)
 
         #
         # Aggregate/cluster the objects using the object link
