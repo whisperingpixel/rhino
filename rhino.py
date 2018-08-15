@@ -2,6 +2,7 @@ import gdal
 import numpy
 import shapely
 import shapely.geometry as geometry
+import shapely.ops as operations
 import math
 
 from rhino_helper import progressBar
@@ -23,8 +24,8 @@ class Datacube:
     neighbourhood = None
 
     def __init__(self):
-        self.__datacube_coverage = []
-        self.__datacube_objects = []
+        self.__datacube_coverage = None
+        self.__datacube_objects = None
 
 
     def load(self, boundingbox):
@@ -35,7 +36,7 @@ class Datacube:
         """
         ## TODO: Load datacube from here. Be advised that this is a workaraound without a datacube
 
-        Datacube.dataset = gdal.Open('demodata/demolayer.tif')
+        Datacube.dataset = gdal.Open('demodata/demolayer_lowres.tif')
         
         ## TODO: account for different bands
         band = Datacube.dataset.GetRasterBand(1)
@@ -53,6 +54,12 @@ class Datacube:
 
         :param layer: int
         """
+
+        #
+        # Init an empty object view
+        #
+        self.__datacube_objects = []
+
         (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size) = Datacube.dataset.GetGeoTransform()
 
         #
@@ -82,7 +89,7 @@ class Datacube:
             # Create an object and fill it with the atom
             #
             o = Object()
-            o.create([Atom({"lat": x_coord, "lon": y_coord},{"property": property, "value": value})])
+            o.create([Atom({"lat": x_coord, "lon": y_coord},{"property": property, "value": value},{"x":x_index,"y":y_index})])
             self.__datacube_objects.append(o)
 
             counter += 1
@@ -94,8 +101,17 @@ class Datacube:
         Creates the coverage view in the rhino datacube.
 
         :param objects: list of objects
-        """        
-        pass
+        """
+        new_coverage = numpy.array(self.__datacube_coverage, copy=True)
+        new_coverage = new_coverage * 0
+
+        for o in objects:
+            for a in o.getAtoms():
+                x,y = a.getIndex()
+                value = a.getObservationValue()
+                new_coverage[x][y] = value
+
+        self.__datacube_coverage = new_coverage
 
     def getDatasetMetadata(self):
         """
@@ -153,13 +169,16 @@ class Datacube:
         if len(objects) == 0:
             return
 
+
+        self.createCoverageView(objects)
+
         #
         # Aggregate/cluster the objects using the object link
         # class.
         #
-        l = Link("aggregate", objects, True)
-        for o in l.getObjects():
-            o.print()
+#        l = Link("aggregate", objects, True)
+#        for o in l.getObjects():
+#            o.print()
 
 
     def executeQuery(self, command):
@@ -174,7 +193,7 @@ class Datacube:
 
 class Atom:
 
-    def __init__(self, coordinates, observation):
+    def __init__(self, coordinates, observation, index):
 
         ## TODO: Check value integrity
         self.__tuple = {
@@ -184,7 +203,10 @@ class Atom:
             "geometry": geometry.Point(coordinates["lat"],coordinates["lon"]),
             "property": observation["property"],
             "value": observation["value"],
+            "x_index": index["x"],
+            "y_index": index["y"]
         }
+
 
     def getID(self):
         """
@@ -194,6 +216,7 @@ class Atom:
         """        
         return self.__tuple["id"]
 
+
     def getObservationProperty(self):
         """
         Returns the observation property of the atom.
@@ -202,6 +225,7 @@ class Atom:
         """
         return self.__tuple["property"]
 
+
     def getObservationValue(self):
         """
         Returns the observation value of the atom.
@@ -209,6 +233,7 @@ class Atom:
         :return: ?
         """        
         return self.__tuple["value"]
+
 
     def getObservation(self):
         """
@@ -219,6 +244,7 @@ class Atom:
         """               
         return {"property": self.__tuple["property"], "value": self.__tuple["value"]}
 
+
     def getLatitude(self):
         """
         Returns the latitude of the atom.
@@ -226,6 +252,7 @@ class Atom:
         :return: float
         """        
         return self.__tuple["lat"]
+
 
     def getLongitude(self):
         """
@@ -235,6 +262,7 @@ class Atom:
         """
         return self.__tuple["lon"]
 
+
     def getCoordinates(self):
         """
         Returns the coordinates of the atom as tuple
@@ -242,9 +270,23 @@ class Atom:
         :return: tuple(lat, lon)
         """        
         return (self.__tuple["lat"], self.__tuple["lon"])
-    
+
+
     def getGeometry(self):
+        """
+        Returns the geometry of the atom as shapely point
+
+        :return: shapely point
+        """
         return self.__tuple["geometry"]
+
+    def getIndex(self):
+        """
+        Returns the internal index (position within the coverage) for that atom
+
+        :return: shapely point
+        """
+        return (self.__tuple["x_index"], self.__tuple["y_index"])
 
     def print(self):
         print(self.__tuple)
@@ -299,12 +341,6 @@ class Object:
 
         self.attributes["derived"]["number_of_atoms"] = len(self.atoms)
 
-        points = []
-        for a in self.atoms:
-            points.append(a.getGeometry())
-
-        self.attributes["derived"]["boundingbox"] = geometry.MultiPoint(list(points)).envelope
-
     def getAtoms(self):
         """
         Returns the atoms, which are forming the object.
@@ -333,8 +369,33 @@ class Object:
         return coordinates
 
     def getBoundingBox(self):
-        return self.attributes["derived"]["boundingbox"]
-        
+        """
+        Returns bounding box of the object as shapely polygon
+
+        :return: shapely polygon
+        """
+        points = []
+        for a in self.atoms:
+            points.append(a.getGeometry())
+        multipoints = geometry.MultiPoint(list(points))
+#        self.attributes["derived"]["boundingbox"] = multipoints.envelope
+        return multipoints.envelope
+    
+    def getGeometry(self):
+        """
+        Returns geometry of the object as shapely polygon. Do not use this, it is very slow
+
+        :return: shapely polygon
+        """
+        points = []
+        for a in self.atoms:
+            points.append(a.getGeometry())
+        multipoints = geometry.MultiPoint(list(points))        
+        buf = Datacube.neighbourhood.getMaxDistance()
+        polygon = operations.cascaded_union(multipoints.buffer(buf * 2))
+        #self.attributes["derived"]["geometry"] = polygon.buffer(- (buf * 1.5))
+        return polygon.buffer(- (buf * 1.5))
+
     def linksWithObjects(self, link_type, candidate):
         """
         Creates a link to an object candidate.
@@ -498,7 +559,7 @@ class Link:
                     # Grow the current object
                     #
                     temp_obj.grow(cand.getAtoms())
-                    print("object # "+ str(list_pos) +" grows. Size is now " + str(temp_obj.getNumberOfAtoms()))
+                   # print("object # "+ str(list_pos) +" grows. Size is now " + str(temp_obj.getNumberOfAtoms()))
                     #
                     # delete the candidate from the list
                     #
@@ -531,41 +592,6 @@ class Link:
 
         return final_aggregates
 
-    def __demo_aggregate(self, objects):
-
-        from sklearn.cluster import DBSCAN
-        np_arr = []
-        at_arr = []
-        for o in objects:
-            atoms = o.getAtoms()
-            for a in atoms:
-                at_arr.append(a)
-                np_arr.append([a.getLatitude(), a.getLongitude()])
-
-        X = numpy.array(np_arr)
-        db = DBSCAN(eps=0.005).fit(X)
-
-        atom_list = []
-        for i,label in enumerate(db.labels_):
-            try:
-                atom_list[label].append(at_arr[i])
-            except Exception:
-                atom_list.append([at_arr[i]])
-        
-        print (len(atom_list))
-        return atom_list
-    
-    def __demo_aggregate2(self, objects):
-        np_arr = []
-        at_arr = []
-        for o in objects:
-            atoms = o.getAtoms()
-            for a in atoms:
-                at_arr.append(a)
-                np_arr.append([a.getLatitude(), a.getLongitude()])
-
-        for (x_index, y_index), value in numpy.ndenumerate(np_arr):
-            print (str(x_index) + "/" + str(y_index) + ":"+ str(value))
 
     def getObjects(self):
         """
@@ -602,6 +628,18 @@ class Neighbourhood:
         """                        
         return self.concept
 
+    def getMaxDistance(self):
+
+        ## TODO: Account for different grains in X and Y direction
+        dist = max(Datacube.getDatasetMetadata(Datacube)["coverage_x_grain"], Datacube.getDatasetMetadata(Datacube)["coverage_y_grain"])
+
+        #
+        # add tolerance
+        #
+        dist += self.tolerance
+
+        return dist
+
     def isNeighbour(self, object, candidate):
         """
         Compares two objects and evaluates whether they are neighbours or not, based on the
@@ -616,14 +654,11 @@ class Neighbourhood:
         #
         # Get allowed distance
         #
-        ## TODO: Account for different grains in X and Y direction
-        allowed_dist = max(Datacube.getDatasetMetadata(Datacube)["coverage_x_grain"], Datacube.getDatasetMetadata(Datacube)["coverage_y_grain"])
+        allowed_dist = self.getMaxDistance()
 
         #
-        # add tolerance
+        # Extract the atoms
         #
-        allowed_dist += self.tolerance
-
         obj_atoms = object.getAtoms()
         cand_atoms = candidate.getAtoms()
 
