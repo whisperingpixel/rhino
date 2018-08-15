@@ -7,6 +7,11 @@ import math
 
 from rhino_helper import progressBar
 
+## TODO:
+# - Levels as class?
+# - Coverage as class?
+
+
 class Datacube:
 
     dataset = None
@@ -26,6 +31,7 @@ class Datacube:
     def __init__(self):
         self.__datacube_coverage = []
         self.__datacube_objects = []
+
 
     def load(self, boundingbox):
         """
@@ -97,6 +103,7 @@ class Datacube:
     
         self.__datacube_objects.append(object_list)
 
+
     def createCoverageView(self, from_level):
         """
         Creates the coverage view in the rhino datacube.
@@ -113,6 +120,7 @@ class Datacube:
                 new_coverage[x][y] = value
 
         self.__datacube_coverage.append(new_coverage)
+
 
     def getDatasetMetadata(self):
         """
@@ -150,14 +158,14 @@ class Datacube:
         objects = []
         candidates = self.__datacube_objects[from_level]
         for obj in candidates:
-            if obj.getAttributeValue("class") == 1:
+            if obj.getAttributeValue("class") == 1: ## TODO: from condition!
                 objects.append(obj)
         return objects
 
 
-    def aggregateObjects(self, from_level, condition):
+    def aggregate(self, from_level, condition):
         """
-        Aggregates objects based on a certain condition.
+        Aggregates ? based on a certain condition.
 
         :param condition: ?
         :return: ?
@@ -190,7 +198,7 @@ class Datacube:
         # Aggregate/cluster the objects using the object link
         # class.
         #
-#        l = Link("aggregate", objects, True)
+        l = Link("aggregate", objects, True)
 #        for o in l.getObjects():
 #            o.print()
 
@@ -305,7 +313,29 @@ class Atom:
     def print(self):
         print(self.__tuple)
 
+class Coverage:
 
+    def __init__(self):
+        self.id = id(self)
+        self.coverage = [[]]
+    
+    def create(self, atoms):
+        """
+        Creates the coverage (create as in "creation" by god), don't confuse with
+        initialisation. It takes a list of atoms and puts it into a coverage.
+
+        :param atoms: list of atoms
+        """
+        for atom in atoms:
+            x,y = atom.getIndex()
+            self.coverage[x][y] = atom
+
+    def getCoverage(self, boundingbox):
+        if boundingbox is None:
+            return self.coverage
+        else:
+            return self.coverage
+            
 class Object:
 
     def __init__(self):
@@ -489,7 +519,8 @@ class Link:
 
         if link_type == "aggregate":
             
-            self.__new_objects = self.__aggregate(objects, Datacube.neighbourhood)
+            # TODO: This better goes to the coverage view!
+            self.__new_objects = self.__aggregateObjectLevel(objects, Datacube.neighbourhood)
 
             #self.__new_objects = self.__demo_aggregate2(objects)
 
@@ -516,7 +547,7 @@ class Link:
             if mutual == True:
                 candidate.linksWithObjects(link_type, target)
 
-    def __aggregate(self, objects, neighbourhood):
+    def __aggregateObjectLevel(self, objects, neighbourhood):
         """
         Aggregates the selected objects using the given concept of neighbourhood
 
@@ -567,7 +598,7 @@ class Link:
                 #
                 # If the object is neighbour
                 #
-                if neighbourhood.isNeighbour(temp_obj, cand):
+                if neighbourhood.isNeighbourObject(temp_obj, cand):
 
                     #
                     # Grow the current object
@@ -654,12 +685,12 @@ class Neighbourhood:
 
         return dist
 
-    def isNeighbour(self, object, candidate):
+    def isNeighbourObject(self, target, candidate):
         """
         Compares two objects and evaluates whether they are neighbours or not, based on the
         selected concept of neighbourhood.
 
-        :param object: Target object
+        :param target: Target object
         :param candidate: 
         :return: boolean
         """                
@@ -673,14 +704,14 @@ class Neighbourhood:
         #
         # Extract the atoms
         #
-        obj_atoms = object.getAtoms()
+        obj_atoms = target.getAtoms()
         cand_atoms = candidate.getAtoms()
 
         #
         # Check the bounding boxes at first. If their distance is larger than the allowed distance
         # it is impossible that the object's distance is smaller than the allowed distance
         #
-        if object.getBoundingBox().distance(candidate.getBoundingBox()) < allowed_dist:
+        if target.getBoundingBox().distance(candidate.getBoundingBox()) < allowed_dist:
             for a1 in obj_atoms:
                 for a2 in cand_atoms:
                     dist = a1.getGeometry().distance(a2.getGeometry())
@@ -696,3 +727,6 @@ class Neighbourhood:
             return True
         else:
             return False
+
+    def isNeighbourInCoverage(self, target, candidate):
+        pass
