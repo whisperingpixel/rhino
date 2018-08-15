@@ -403,8 +403,13 @@ class Link:
                 candidate.linksWithObjects(link_type, target)
 
     def __aggregate(self, objects, neighbourhood):
+        """
+        Aggregates the selected objects using the given concept of neighbourhood
 
-        print ("aggregate with "+ str(neighbourhood.getConcept()) + " neighbourhood definition.")
+        :param objects: List of objects to be aggregated
+        :param neighbourhood: Neighbourhood object (i.e. inst. class)
+        :return: list of (aggregated) objects
+        """
 
         #
         # Position of the list, initial starting point will be 0
@@ -430,8 +435,6 @@ class Link:
         # Iterate through the list of aggregates
         #
         while len(aggregates) > 0:
-
-            print("Iteration # " + str(list_pos))
 
             #
             # Set a flag whether we found something or not
@@ -530,12 +533,26 @@ class Neighbourhood:
             self.concept = concept
         else:
             raise Exception("Neighborhood concept " + str(concept) + " not implemented")
+        
+        self.tolerance = 0.001
     
     def getConcept(self):
+        """
+        Returns selected concept of neighbourhood
+
+        :return: string
+        """                        
         return self.concept
 
     def isNeighbour(self, object, candidate):
+        """
+        Compares two objects and evaluates whether they are neighbours or not, based on the
+        selected concept of neighbourhood.
 
+        :param object: Target object
+        :param candidate: 
+        :return: boolean
+        """                
         min_dist = float("inf")
 
         obj_atoms = object.getAtoms()
@@ -557,7 +574,7 @@ class Neighbourhood:
         #
         # add tolerance
         #
-        allowed_dist += 0.001
+        allowed_dist += self.tolerance
 
         #
         # Check whether the detected distance is smaller than the allowed distance
