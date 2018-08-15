@@ -5,6 +5,8 @@ import math
 
 class Datacube:
 
+    dataset = None
+
     object_model = {
         "derived": ["number_of_atoms"],
         "modelled": ["class"]
@@ -18,7 +20,6 @@ class Datacube:
     neighbourhood = None
 
     def __init__(self):
-        self.__dataset = None
         self.__datacube_coverage = []
         self.__datacube_objects = []
 
@@ -31,8 +32,10 @@ class Datacube:
         """
         ## TODO: Load datacube from here. Be advised that this is a workaraound without a datacube
 
-        self.__dataset = gdal.Open('demodata/demolayer.tif')
-        band = self.__dataset.GetRasterBand(1)
+        Datacube.dataset = gdal.Open('demodata/demolayer.tif')
+        
+        ## TODO: account for different bands
+        band = Datacube.dataset.GetRasterBand(1)
         self.__datacube_coverage = numpy.array(band.ReadAsArray())
 
         #
@@ -47,7 +50,7 @@ class Datacube:
 
         :param layer: int
         """
-        (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size) = self.__dataset.GetGeoTransform()
+        (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size) = Datacube.dataset.GetGeoTransform()
 
         #
         # Iterate through all pixels and create an atom from it. Then, create an object for each atom.
@@ -87,10 +90,10 @@ class Datacube:
 
         :return: dict
         """
-        gt = self.__dataset.GetGeoTransform()
+        gt = Datacube.dataset.GetGeoTransform()
         metadata = {
-            "coverage_x_size": self.__dataset.RasterXSize,
-            "coverage_y_size": self.__dataset.RasterYSize,
+            "coverage_x_size": Datacube.dataset.RasterXSize,
+            "coverage_y_size": Datacube.dataset.RasterYSize,
             "coverage_x_grain": gt[1],
             "coverage_y_grain": gt[5]
         }
@@ -427,8 +430,8 @@ class Link:
         # Iterate through the list of aggregates
         #
         while len(aggregates) > 0:
-            print("Iteration # " + str(list_pos))
 
+            print("Iteration # " + str(list_pos))
 
             #
             # Set a flag whether we found something or not
@@ -438,8 +441,8 @@ class Link:
             #
             # Iterate through the other objects
             #
+
             for i,cand in enumerate(aggregates):
-                
                 #
                 # If the object is neighbour
                 #
@@ -449,7 +452,7 @@ class Link:
                     # Grow the current object
                     #
                     temp_obj.grow(cand.getAtoms())
-                    print("object size grows and is now: " + str(temp_obj.getNumberOfAtoms()))
+
                     #
                     # delete the candidate from the list
                     #
@@ -459,7 +462,7 @@ class Link:
                     # Set the flag that a neighbour has been found
                     #
                     aggregated = True
-
+            
             if aggregated == False:
 
                 #
@@ -549,7 +552,7 @@ class Neighbourhood:
         #
         # Get allowed distance
         #
-        allowed_dist = max(Datacube.getDatasetMetadata(Datacube)["coverage_x_grain"] + Datacube.getDatasetMetadata(Datacube)["coverage_y_grain"])
+        allowed_dist = max(Datacube.getDatasetMetadata(Datacube)["coverage_x_grain"], Datacube.getDatasetMetadata(Datacube)["coverage_y_grain"])
 
         #
         # add tolerance
