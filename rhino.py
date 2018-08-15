@@ -4,6 +4,8 @@ import shapely
 import shapely.geometry as geometry
 import math
 
+from rhino_helper import progressBar
+
 class Datacube:
 
     dataset = None
@@ -58,6 +60,13 @@ class Datacube:
         # Initial objects only consist of one single atom
         #
         # Stolen from here: https://stackoverflow.com/questions/6967463/iterating-over-a-numpy-array/6967491#6967491
+
+        metadata = self.getDatasetMetadata()
+        size = metadata["coverage_x_size"] * metadata["coverage_y_size"]
+        counter = 0
+
+        progressBar(counter, size, prefix = 'Generate object view:', suffix = 'Complete', length = 50)
+        
         for (x_index, y_index), value in numpy.ndenumerate(self.__datacube_coverage):
             
             #
@@ -75,6 +84,9 @@ class Datacube:
             o = Object()
             o.create([Atom({"lat": x_coord, "lon": y_coord},{"property": property, "value": value})])
             self.__datacube_objects.append(o)
+
+            counter += 1
+            progressBar(counter, size, prefix = 'Generate object view:', suffix = 'Complete', length = 50)
 
 
     def createCoverageView(self, objects):
@@ -320,7 +332,7 @@ class Object:
             coordinates.append(a.getCoordinates())
         return coordinates
 
-    def getBoundinBox(self):
+    def getBoundingBox(self):
         return self.attributes["derived"]["boundingbox"]
         
     def linksWithObjects(self, link_type, candidate):
@@ -461,6 +473,10 @@ class Link:
         #
         # Iterate through the list of aggregates
         #
+        size = len(objects)
+        counter = 0
+        progressBar(counter, size, prefix = 'Aggregate objects:', suffix = 'Complete', length = 50)
+
         while len(aggregates) > 0:
 
             #
@@ -509,6 +525,9 @@ class Link:
                 # Get the next object
                 #
                 temp_obj = aggregates[0]                
+
+            counter += 1
+            progressBar(counter, size, prefix = 'Aggregate objects:', suffix = 'Complete', length = 50)
 
         return final_aggregates
 
@@ -612,7 +631,7 @@ class Neighbourhood:
         # Check the bounding boxes at first. If their distance is larger than the allowed distance
         # it is impossible that the object's distance is smaller than the allowed distance
         #
-        if object.getBoundinBox().distance(candidate.getBoundinBox()) < allowed_dist:
+        if object.getBoundingBox().distance(candidate.getBoundingBox()) < allowed_dist:
             for a1 in obj_atoms:
                 for a2 in cand_atoms:
                     dist = a1.getGeometry().distance(a2.getGeometry())
