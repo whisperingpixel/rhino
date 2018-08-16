@@ -32,6 +32,8 @@ class Datacube:
         self.__datacube_coverage = []
         self.__datacube_objects = []
 
+        self.__levels = []
+
 
     def load(self, boundingbox):
         """
@@ -45,6 +47,7 @@ class Datacube:
         
         ## TODO: account for different bands
 
+        level = self.createNewLevel("initial_level")
         #
         # Note there are some special treatments since this is the loading procedure (hen-egg problem). Do not 
         # do this somewhere else. Basically it avoids that the atoms have to be created multiple times. The numpy array 
@@ -53,8 +56,8 @@ class Datacube:
         band = Datacube.dataset.GetRasterBand(1)
         initial_coverage = Coverage(Datacube.dataset.RasterXSize, Datacube.dataset.RasterYSize, Datacube.dataset.GetGeoTransform())
         initial_coverage.create(array = numpy.array(band.ReadAsArray()))
-        self.__datacube_coverage.append(initial_coverage)
-        self.createObjectView(0)
+        self.__datacube_coverage[level] = initial_coverage
+        self.createObjectView(level, level)
 
         #
         # Use the atoms created by the object view for now
@@ -70,7 +73,27 @@ class Datacube:
         Datacube.neighbourhood = Neighbourhood("4-connected")
 
 
-    def createObjectView(self, from_level):
+    def createNewLevel(self, name ="no name available", description = "no description available"):
+        """
+        Creates a new level, which is pre-condition for creating any object or coverage view.
+
+        :param name: string; name of the level (optional)
+        :param description: string; decription of the level (optional)
+        """        
+        new_level = len(self.__levels)
+        self.__levels.append({
+            "level": new_level,
+            "name": name,
+            "description": description 
+        })
+
+        self.__datacube_coverage.append(Coverage)
+        self.__datacube_objects.append([])
+
+        return new_level
+
+
+    def createObjectView(self, from_level, to_level):
         """
         Creates the object view in the rhino datacube.
 
@@ -120,10 +143,10 @@ class Datacube:
             counter += 1
             progressBar(counter, size, prefix = 'Generate object view:', suffix = 'Complete', length = 50)
     
-        self.__datacube_objects.append(object_list)
+        self.__datacube_objects[to_level] = object_list
 
 
-    def createCoverageView(self, from_level):
+    def createCoverageView(self, from_level, to_level):
         """
         Creates the coverage view in the rhino datacube.
 
@@ -138,8 +161,7 @@ class Datacube:
                 value = a.getObservationValue()
                 new_coverage[x][y] = value
 
-        self.__datacube_coverage.append(new_coverage)
-
+        self.__datacube_coverage[to_level] = new_coverage
 
     def getDatasetMetadata(self):
         """
@@ -199,19 +221,19 @@ class Datacube:
             return
 
         #
-        # Increment level by 1
+        # Create new level
         #
-        level = from_level + 1
+        level = self.createNewLevel()
 
         #
         # create object view
         #
-        self.__datacube_objects.append(objects)
+        self.__datacube_objects[level] = objects
 
         #
         # Create coverage view.
         #
-        self.createCoverageView(level)
+        self.createCoverageView(level, level)
 
         #
         # Aggregate/cluster the objects using the object link
