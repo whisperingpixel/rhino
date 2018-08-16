@@ -32,6 +32,14 @@ Having objects also means to have relationships (associations) between them. In 
 
 Determining which objects are linked (e.g. aggregated) is difficult. (As a matter of fact, atoms will not be aggregated into objects, because all links including aggregation only exists between objects. Neither in the coverage-based view nor in the object-based view atoms "live" on their own. They are either embedded into a grid or into an object. This means, initially, every atom makes up an object). Linking depends on the application/domain and is defined by a concept of **neighbourhood**. This might be simply a 4-connected neighbourhood of a grid or a more complicated concept.
 
+## How to use it?
+
+In the best case you can consider it as "experimental". It is currently not operational and the main intention (for now) is also not to make it operational. The main reason is that it is very slow since it more or less directly implements the GIScience theory without considering performance aspects.
+
+## Is it possible to share, have or steal it?
+
+This is the core of my PhD ... input is welcome, but please don't steal it or at least wait until I got my PhD :-)
+
 ## References
 
 Blaschke, T., 2010. Object based image analysis for remote sensing. *ISPRS journal of photogrammetry and remote sensing*, *65*(1), pp.2-16. https://www.sciencedirect.com/science/article/pii/S0924271609000884
