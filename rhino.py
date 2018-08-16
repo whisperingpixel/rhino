@@ -1,14 +1,16 @@
 import gdal
 import numpy
 import shapely
-import shapely.geometry as geometry
+import shapely.geometry as shapely_geometry
 import shapely.ops as operations
 import math
+import copy
 
 from rhino_helper import progressBar
 
 ## TODO:
 # - generate common id for atoms
+# - createCoverageView function is misleading
 
 
 class Datacube:
@@ -16,8 +18,14 @@ class Datacube:
     dataset = None
 
     object_model = {
-        "derived": ["number_of_atoms"],
-        "modelled": ["class"]
+        "derived":{
+            "compactness": None,
+            "boundingbox": None,
+            "geometry": None
+        },
+        "modelled": {
+            "class": None
+        }
     }
 
     link_model = {
@@ -92,6 +100,19 @@ class Datacube:
         return new_level
 
 
+    def getLevel(self, depth):
+        """
+        Returns the level by the depth
+
+        :param depth: integer
+        :return: dict
+        """
+        for level in self.__levels:
+            if level["level"] == depth:
+                return level
+        return None
+
+
     def createObjectView(self, from_level, to_level):
         """
         Creates the object view in the rhino datacube.
@@ -118,9 +139,9 @@ class Datacube:
         size = metadata["coverage_x_size"] * metadata["coverage_y_size"]
         counter = 0
 
-        progressBar(counter, size, prefix = 'Generate object view:', suffix = 'Complete', length = 50)
+        progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
         
-        for (x_index, y_index), value in numpy.ndenumerate(self.__datacube_coverage[from_level].getStupidArray()):
+        for (y_index, x_index), value in numpy.ndenumerate(self.__datacube_coverage[from_level].getStupidArray()):
             
             #
             # Extract coordinates, properties and values from atoms
@@ -140,7 +161,7 @@ class Datacube:
             object_list.append(o)
 
             counter += 1
-            progressBar(counter, size, prefix = 'Generate object view:', suffix = 'Complete', length = 50)
+            progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
     
         self.__datacube_objects[to_level] = object_list
 
@@ -148,6 +169,7 @@ class Datacube:
     def createCoverageView(self, from_level, to_level):
         """
         Creates the coverage view in the rhino datacube.
+        This can also be seen as masking, e.g., after selection of objects.
 
         :param objects: list of objects
         """
@@ -196,20 +218,63 @@ class Datacube:
     #
     # These are user-friendly wrapper-functions
     #
-    def selectObjectsByCondition(self, from_level, condition):
+    def selectObjectsByCondition(self, from_level, condition, create_level = False):
         """
         Select the objects in the object view of the rhino datacube, which match
         a certain condition.
 
+        :param from_level: integer, the level which should be used to select the objects
         :param condition: ?
+        :param create_level: boolean, whether a new level should be created or not
         :return: list of objects
-        """        
+        """
+
+        def eq(value, candidate):
+            return value == candidate
+
+        def neq(value, candidate):
+            return value != candidate
+
+        def lt(value, candidate):
+            return value < candidate
+
+        def let(value, candidate):
+            return value <= candidate
+
+        def gt(value, candidate):
+            return value > candidate
+
+        def get(value, candidate):
+            return value >= candidate
+
         objects = []
         candidates = self.__datacube_objects[from_level]
+
+        counter = 0
+        size = len(candidates)
+        progressBar(counter, size, prefix = 'Selecting objects with condition:', suffix = 'Complete', length = 50)
+
         for obj in candidates:
-            if obj.getAttributeValue("class") == 1: ## TODO: from condition!
+            if locals()[condition["operator"]](obj.getAttributeValue(condition["key"]), condition["value"]): ## TODO: from condition!
                 objects.append(obj)
-        return objects
+            
+            counter += 1
+            progressBar(counter, size, prefix = 'Selecting objects with condition:', suffix = 'Complete', length = 50)
+
+
+        if create_level == True:
+
+            level = self.createNewLevel()
+            self.__datacube_objects[level] = objects
+            self.createCoverageView(level, level)
+            coverage = self.__datacube_coverage[level]
+
+        else:
+
+            level = None
+            coverage = None
+    
+        return objects, coverage, level
 
 
     def aggregate(self, from_level, condition):
@@ -220,33 +285,36 @@ class Datacube:
         :return: ?
         """
 
+        ## TODO: use create new level swthc in select method
+
         #
-        # Get all objects, which match the condition. If no objects
+        # STEP 1: Select all objects, which match the condition. If no objects
         # match the condition, return here.
         #
-        objects = self.selectObjectsByCondition(from_level, condition)
+        # This function generates a new level and views
+        #
+        objects, dummy_coverage, level = self.selectObjectsByCondition(from_level, condition, create_level=True)
         if len(objects) == 0:
             return
 
         #
-        # Create new level
-        #
-        level = self.createNewLevel()
-
-        #
-        # create object view
-        #
-        self.__datacube_objects[level] = objects
-
-        #
-        # Create coverage view.
-        #
-        self.createCoverageView(level, level)
-
-        #
-        # Aggregate/cluster
+        # STEP 2: Aggregate and update views
         #
 
+        #
+        # Aggregate/cluster using the Link class
+        #
+        l = Link("aggregation", self.__datacube_coverage[level])
+
+        #
+        # Update the object view with the new objects
+        #
+        self.__datacube_objects[level] = l.getObjects()
+
+        #
+        # Returns the level
+        #
+        return self.getLevel(level)
 
 
     def executeQuery(self, command):
@@ -268,7 +336,7 @@ class Atom:
             "id": id(self),
             "lat": coordinates["lat"],
             "lon": coordinates["lon"],
-            "geometry": geometry.Point(coordinates["lat"],coordinates["lon"]),
+            "geometry": shapely_geometry.Point(coordinates["lat"],coordinates["lon"]),
             "property": observation["property"],
             "value": observation["value"],
             "x_index": index["x"],
@@ -367,6 +435,9 @@ class Coverage:
         self.__numpyarray = None
         self.geotransform = geotransform
 
+        self.x_size = x_size
+        self.y_size = y_size
+
         for x in range(x_size):
             self.coverage.append([])
             for y in range(y_size):
@@ -392,16 +463,42 @@ class Coverage:
         if array is not None:
             self.__numpyarray = array
 
-    def getCoverage(self, boundingbox):
+    def getCoverage(self, boundingbox=None):
+        """
+        Returns the atom coverage.
+
+        :param boundingbox: ?
+        :return: atom coverage
+        """        
         if boundingbox is None:
             return self.coverage
         else:
             return self.coverage
     
     def getStupidArray(self):
+        """
+        Returns the stupid (numpy) array. This should only be used for
+        performance reasons and hidden from the user.
+
+        :return: numpy array
+        """         
         return self.__numpyarray
 
+    def getSize(self):
+        """
+        Returns the size in x and y direction of the coverage.
+
+        :return: tuple (x_size, y_size)
+        """                 
+        return (self.x_size, self.y_size)
+
+
     def getMetadata(self):
+        """
+        Returns the metadata (geotransform) of the coverage.
+
+        :return: tuple (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size)
+        """                 
         return self.geotransform
 
 class Object:
@@ -410,7 +507,7 @@ class Object:
         self.id = id(self)
         self.atoms = []
         self.links = []
-        self.attributes = {"derived":{}, "modelled":["class"]} ## TODO: This should be derived from the object model
+        self.__attributes = copy.deepcopy(Datacube.object_model)
 
     def create(self, atoms):
         """
@@ -432,26 +529,27 @@ class Object:
         self.atoms.extend(atoms)
 #        self.__calculateAlphaShape(3)
         self.__calculateGeoAttributes()
+        self.__attributes["derived"]["geometry"] = None
 
     def shrink(self, atoms):
         """
         Shrinks the object by the given atomes
 
         :param atoms: list of atoms
-        """        
-        pass
+        """
+        self.__attributes["derived"]["geometry"] = None
 
     def __calculateAlphaShape(self, neighbors):
         
         from rhino_geo import calcualateAlphaShape
         polygon = calcualateAlphaShape(self.getAtomCoordinates(), neighbors)
         if polygon:
-            self.attributes["derived"]["outline"] = polygon
+            self.__attributes["derived"]["outline"] = polygon
         ## TODO: Handle case where not enough atoms are available for that polygon
 
     def __calculateGeoAttributes(self):
 
-        self.attributes["derived"]["number_of_atoms"] = len(self.atoms)
+        self.__attributes["derived"]["number_of_atoms"] = len(self.atoms)
 
     def getAtoms(self):
         """
@@ -486,12 +584,17 @@ class Object:
 
         :return: shapely polygon
         """
-        points = []
-        for a in self.atoms:
-            points.append(a.getGeometry())
-        multipoints = geometry.MultiPoint(list(points))
-#        self.attributes["derived"]["boundingbox"] = multipoints.envelope
-        return multipoints.envelope
+        if self.__attributes["derived"]["boundingbox"] == None:
+            points = []
+            for a in self.atoms:
+                points.append(a.getGeometry())
+            multipoints = shapely_geometry.MultiPoint(list(points))
+            boundingbox = multipoints.envelope
+            self.__attributes["derived"]["boundingbox"] = boundingbox
+        else:
+            boundingbox = self.__attributes["derived"]["boundingbox"]
+
+        return boundingbox
     
     def getGeometry(self):
         """
@@ -499,14 +602,23 @@ class Object:
 
         :return: shapely polygon
         """
-        points = []
-        for a in self.atoms:
-            points.append(a.getGeometry())
-        multipoints = geometry.MultiPoint(list(points))        
-        buf = Datacube.neighbourhood.getMaxDistance()
-        polygon = operations.cascaded_union(multipoints.buffer(buf * 2))
-        #self.attributes["derived"]["geometry"] = polygon.buffer(- (buf * 1.5))
-        return polygon.buffer(- (buf * 1.5))
+        if self.__attributes["derived"]["geometry"] == None:
+            points = []
+            for a in self.atoms:
+                points.append(a.getGeometry())
+            multipoints = shapely_geometry.MultiPoint(list(points))
+
+            #
+            # TODO: Search for better algorithm
+            #
+            buf = Datacube.neighbourhood.getMaxDistance()
+            geometry = operations.cascaded_union(multipoints.buffer(buf))
+            geometry = geometry.buffer(- (buf / 2))
+            self.__attributes["derived"]["geometry"] = geometry
+        else:
+            geometry = self.__attributes["derived"]["geometry"]
+
+        return geometry
 
     def linksWithObjects(self, link_type, candidate):
         """
@@ -538,10 +650,14 @@ class Object:
         return self.id
 
     def getAttributeValue(self, attribute):
-        if attribute in self.attributes["derived"]:
-            return self.attributes["derived"][attribute]
+        if attribute in self.__attributes["derived"]:
+            if attribute == "compactness":
+
+                geom = self.getGeometry()
+                return (4 * math.pi * geom.area) / (geom.length * geom.length)
+
         else:
-            if attribute in self.attributes["modelled"]:
+            if attribute in self.__attributes["modelled"]:
                 atomProperties = []
                 for a in self.atoms:
                     atomProperties.append(a.getObservationValue()) ## TODO: return based on the attribute arg
@@ -558,8 +674,8 @@ class Object:
         :param attribute: string
         :param value: ?
         """        
-        if attribute in self.attributes["modelled"]:
-            self.attributes["modelled"][attribute] = value
+        if attribute in self.__attributes["modelled"]:
+            self.__attributes["modelled"][attribute] = value
         ## TODO: rais exception
 
 
@@ -578,133 +694,79 @@ class Object:
 
 class Link:
 
-    def __init__(self, link_type, objects,  mutual):
+    def __init__(self, link_type, target, mutual = True):
         self.id = id(self)
         self.attributes = {"derived":{}}
         self.attributes["derived"]["link_type"] = link_type
 
         self.__new_objects = []
 
-        #  if link_type == "aggregate":
+        if type(target) == Coverage:
+
+            if link_type not in ["aggregation", "generalisation"]:
+                raise Exception("Linking coverage atoms requires aggregation or generalisation")
             
-        #     # TODO: This better goes to the coverage view!
-        #     self.__new_objects = self.__aggregateObjectLevel(objects, Datacube.neighbourhood)
+            self.__aggregation(target)
 
-        #     #self.__new_objects = self.__demo_aggregate2(objects)
+        if type(target) == list:
+            
+            if len(target) != 2:
+                raise Exception ("Exactly 2 objects are expected to be part of the link")
 
-        #     # demo_array = self.__demo_aggregate(objects)
-        #     # print("end clustering")
-        #     # for atoms in demo_array:
-        #     #     #atoms = []
-        #     #     #for o in objects:
-        #     #     #    atoms.extend(o.getAtoms())
+            target[0].linksWithObjects(link_type, target[1])
+            if mutual == True:
+                target[1].linksWithObjects(link_type, target[0])
 
-        #     #     new_o = Object()
-        #     #     new_o.create(atoms)
 
-        #     #     self.__new_objects.append(new_o)
-
-        # else:
-
-        if len(object != 2):
-            raise Exception ("Exactly 2 objects are expected to be part of the link")
-
-        target = objects[0]
-        candidate = objects[1]
-
-        target.linksWithObjects(link_type, candidate)
-        if mutual == True:
-            candidate.linksWithObjects(link_type, target)
-
-    def __aggregateObjectLevel(self, objects, neighbourhood):
+    def __aggregation(self, coverage):
         """
-        Aggregates the selected objects using the given concept of neighbourhood
+        Aggregates the atoms to objects. Background is considered 0!
 
-        :param objects: List of objects to be aggregated
-        :param neighbourhood: Neighbourhood object (i.e. inst. class)
-        :return: list of (aggregated) objects
+        :param coverage: Coverage
         """
 
-        #
-        # Position of the list, initial starting point will be 0
-        #
-        list_pos = 0
+        stupid_array = coverage.getStupidArray()
+        atom_coverage = coverage.getCoverage(None)
+
+        x_size, y_size = coverage.getSize()
 
         #
-        # As we are juggling with the object list, make a copy of it
+        # Get regions using the stupid array
         #
-        aggregates = objects.copy()
-        final_aggregates = []
+        from skimage.measure import label as region_group
+
+        grouped = region_group(stupid_array)
 
         #
-        # Get the first object
+        # Create a nested list where the atoms will be stored
         #
-        temp_obj = aggregates[0]
-        #
-        # Remove this object from the list, so that it will not be used for neighborhood estimation
-        #
-        del aggregates[0]
+        atom_lists = []
+        for i in range(numpy.max(grouped)):
+            atom_lists.append([])
 
         #
-        # Iterate through the list of aggregates
+        # Aggregate the atoms to the atom_list
         #
-        size = len(objects)
         counter = 0
-        progressBar(counter, size, prefix = 'Aggregate objects:', suffix = 'Complete', length = 50)
+        progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate)', suffix = 'Complete', length = 50)
 
-        while len(aggregates) > 0:
+        for x in range(x_size):
+             for y in range(y_size):
+                atom = atom_coverage[x][y]
+                object_number = grouped[x][y]
+                if object_number != 0:
+                    atom_lists[object_number-1].append(atom)
 
-            #
-            # Set a flag whether we found something or not
-            #
-            aggregated = False
-
-            #
-            # Iterate through the other objects
-            #
-
-            for i,cand in enumerate(aggregates):
-                #
-                # If the object is neighbour
-                #
-                if neighbourhood.isNeighbourObject(temp_obj, cand):
-
-                    #
-                    # Grow the current object
-                    #
-                    temp_obj.grow(cand.getAtoms())
-                   # print("object # "+ str(list_pos) +" grows. Size is now " + str(temp_obj.getNumberOfAtoms()))
-                    #
-                    # delete the candidate from the list
-                    #
-                    del aggregates[i]
-
-                    #
-                    # Set the flag that a neighbour has been found
-                    #
-                    aggregated = True
-            
-            if aggregated == False:
-
-                #
-                # put the object back in the list if we are finished
-                #
-                final_aggregates.append(temp_obj)
-
-                #
-                # increase list position if we did not find neighbours
-                #                
-                list_pos += 1
-
-                #
-                # Get the next object
-                #
-                temp_obj = aggregates[0]                
-
-            counter += 1
-            progressBar(counter, size, prefix = 'Aggregate objects:', suffix = 'Complete', length = 50)
-
-        return final_aggregates
+                counter += 1
+                progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate)', suffix = 'Complete', length = 50)
+        
+        #
+        # Make objects
+        #
+        for atoms in atom_lists:
+            o = Object()
+            o.create(atoms)
+            self.__new_objects.append(o)
 
 
     def getObjects(self):
@@ -714,6 +776,7 @@ class Link:
         :return: list of objects
         """                
         return self.__new_objects
+
 
     def getID(self):
         """
