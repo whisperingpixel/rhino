@@ -8,7 +8,6 @@ import math
 from rhino_helper import progressBar
 
 ## TODO:
-# - Levels as class?
 # - generate common id for atoms
 
 
@@ -152,16 +151,25 @@ class Datacube:
 
         :param objects: list of objects
         """
-        new_coverage = numpy.array(self.__datacube_coverage[0], copy=True)
-        new_coverage = new_coverage * 0
+        old_stupid_array = self.__datacube_coverage[0].getStupidArray()
+        x_size = len(old_stupid_array)
+        y_size = len(old_stupid_array[0])
 
+        new_stupid_array = numpy.array(old_stupid_array, copy=True)
+        new_stupid_array = new_stupid_array * 0
+        
+        atoms = []
         for o in self.__datacube_objects[from_level]:
             for a in o.getAtoms():
                 x,y = a.getIndex()
                 value = a.getObservationValue()
-                new_coverage[x][y] = value
+                new_stupid_array[x][y] = value
+                atoms.append(a)
 
-        self.__datacube_coverage[to_level] = new_coverage
+        coverage = Coverage(x_size, y_size, self.__datacube_coverage[0].getMetadata())
+        coverage.create(atoms=atoms, array=new_stupid_array)
+        self.__datacube_coverage[to_level] = coverage
+
 
     def getDatasetMetadata(self):
         """
@@ -236,12 +244,9 @@ class Datacube:
         self.createCoverageView(level, level)
 
         #
-        # Aggregate/cluster the objects using the object link
-        # class.
+        # Aggregate/cluster
         #
-        l = Link("aggregate", objects, True)
-#        for o in l.getObjects():
-#            o.print()
+
 
 
     def executeQuery(self, command):
@@ -580,35 +585,36 @@ class Link:
 
         self.__new_objects = []
 
-        if link_type == "aggregate":
+        #  if link_type == "aggregate":
             
-            # TODO: This better goes to the coverage view!
-            self.__new_objects = self.__aggregateObjectLevel(objects, Datacube.neighbourhood)
+        #     # TODO: This better goes to the coverage view!
+        #     self.__new_objects = self.__aggregateObjectLevel(objects, Datacube.neighbourhood)
 
-            #self.__new_objects = self.__demo_aggregate2(objects)
+        #     #self.__new_objects = self.__demo_aggregate2(objects)
 
-            # demo_array = self.__demo_aggregate(objects)
-            # print("end clustering")
-            # for atoms in demo_array:
-            #     #atoms = []
-            #     #for o in objects:
-            #     #    atoms.extend(o.getAtoms())
+        #     # demo_array = self.__demo_aggregate(objects)
+        #     # print("end clustering")
+        #     # for atoms in demo_array:
+        #     #     #atoms = []
+        #     #     #for o in objects:
+        #     #     #    atoms.extend(o.getAtoms())
 
-            #     new_o = Object()
-            #     new_o.create(atoms)
+        #     #     new_o = Object()
+        #     #     new_o.create(atoms)
 
-            #     self.__new_objects.append(new_o)
+        #     #     self.__new_objects.append(new_o)
 
-        else:
-            if len(object != 2):
-                raise Exception ("Exactly 2 objects are expected to be part of the link")
+        # else:
 
-            target = objects[0]
-            candidate = objects[1]
+        if len(object != 2):
+            raise Exception ("Exactly 2 objects are expected to be part of the link")
 
-            target.linksWithObjects(link_type, candidate)
-            if mutual == True:
-                candidate.linksWithObjects(link_type, target)
+        target = objects[0]
+        candidate = objects[1]
+
+        target.linksWithObjects(link_type, candidate)
+        if mutual == True:
+            candidate.linksWithObjects(link_type, target)
 
     def __aggregateObjectLevel(self, objects, neighbourhood):
         """
