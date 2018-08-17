@@ -196,18 +196,9 @@ class Datacube:
                 value = a.getObservationValue()
                 new_stupid_array[x][y] = value
                 atoms.append(a)
-        print("#####################1########################")
-        print(new_stupid_array[60][50])
 
         coverage = Coverage(x_size, y_size, self.__view["coverage"][0].getMetadata())
         coverage.create(atoms=atoms, array=new_stupid_array)
-
-        print("#############################################")
-        print(self.__view["coverage"][0].getStupidArray()[60][50])
-        print(self.__view["coverage"][0].getStupidArray()[50][60])
-        print(coverage.getStupidArray()[60][50])
-        print(coverage.getStupidArray()[50][60])
-        print("#############################################")
 
         self.__view["coverage"][to_level] = coverage
 
