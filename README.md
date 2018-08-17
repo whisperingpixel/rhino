@@ -28,9 +28,9 @@ You can put all of the the atoms into a regular or irregular grid.  You chose to
 
 On the other hand, you can also put all of the surrounding atoms of the aforementioned water atom, which have the same property value, into a common "container" and draw a border around them. Now you chose to have an **object**-based representation. An object has properties such as size, shape, etc and fulfils certain criteria regarding geometry and homogeneity (Blaschke, 2010, Lang et al. 2014).
 
-Having objects also means to have relationships (associations) between them. In RHINO they are called **link**. The reason is that linking objects might generate a new object (e.g. by generalisation of surface water bodies) or maintain a relationship between them (e.g. a contract between a cloud and cloud shadow).
+In the physical world, objects are connected to each other in a explicit or implicit network, they maintain a relationship (association) between them (Kuhn, 2012). In RHINO the relationships or association between objects are called **link**. The reason is that linking objects might generate a new object (e.g. by generalisation of surface water bodies) as well as maintain a relationship between them (e.g. a contract between a cloud and cloud shadow).
 
-Determining which objects are linked (e.g. aggregated) is difficult. (As a matter of fact, atoms will not be aggregated into objects, because all links including aggregation only exists between objects. Neither in the coverage-based view nor in the object-based view atoms "live" on their own. They are either embedded into a grid or into an object. This means, initially, every atom makes up an object). Linking depends on the application/domain and is defined by a concept of **neighbourhood**. This might be simply a 4-connected neighbourhood of a grid or a more complicated concept.
+Determining which objects are linked (e.g. aggregated) is difficult and is not only depending on their category, but also (and maybe this is even more important) on their location (Kuhn, 2012). (As a matter of fact, atoms will not be aggregated into objects, because all links, including aggregation, only exists between objects. Neither in the coverage-based view nor in the object-based view atoms "live" on their own. They are either embedded into a grid or into an object. This means, initially, every atom makes up an object). Linking depends on the application/domain and is defined by a concept of **neighbourhood**. This might be simply a 4-connected neighbourhood of a grid or a more complicated concept.
 
 ## How to use it?
 
@@ -45,5 +45,7 @@ This is the core of my PhD ... input is welcome, but please don't steal it or at
 Blaschke, T., 2010. Object based image analysis for remote sensing. *ISPRS journal of photogrammetry and remote sensing*, *65*(1), pp.2-16. https://www.sciencedirect.com/science/article/pii/S0924271609000884
 
 Goodchild, M. F., Yuan, M., & Cova, T. J. (2007). Towards a general theory of geographic representation in GIS. *International journal of geographical information science*, *21*(3), 239-260. https://www.tandfonline.com/doi/abs/10.1080/13658810600965271 
+
+Kuhn, W., 2012. Core concepts of spatial information for transdisciplinary research. *International Journal of Geographical Information Science*, *26*(12), pp.2267-2276. https://www.tandfonline.com/doi/full/10.1080/13658816.2012.722637
 
 Lang, S., Kienberger, S., Tiede, D., Hagenlocher, M. and Pernkopf, L., 2014. Geons–domain-specific regionalization of space. *Cartography and Geographic Information Science*, *41*(3), pp.214-226. https://www.tandfonline.com/doi/abs/10.1080/15230406.2014.902755
