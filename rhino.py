@@ -9,9 +9,10 @@ import copy
 from rhino_helper import progressBar
 
 ## TODO:
-# - generate common id for atoms
-# - createCoverageView function is misleading
-
+# - generate global id for atoms
+# - createObjectView function is misleading
+# - Handle different bands
+# - Handle time
 
 class Datacube:
 
@@ -36,8 +37,11 @@ class Datacube:
     neighbourhood = None
 
     def __init__(self):
-        self.__datacube_coverage = []
-        self.__datacube_objects = []
+
+        self.__view = {
+            "coverage": [],
+            "objects": []
+        }
 
         self.__levels = []
 
@@ -63,16 +67,16 @@ class Datacube:
         band = Datacube.dataset.GetRasterBand(1)
         initial_coverage = Coverage(Datacube.dataset.RasterXSize, Datacube.dataset.RasterYSize, Datacube.dataset.GetGeoTransform())
         initial_coverage.create(array = numpy.array(band.ReadAsArray()))
-        self.__datacube_coverage[level] = initial_coverage
+        self.__view["coverage"][level] = initial_coverage
         self.createObjectView(level, level)
 
         #
         # Use the atoms created by the object view for now
         #
         atoms = []
-        for o in self.__datacube_objects[0]:
+        for o in self.__view["objects"][0]:
             atoms.append(o.getAtoms()[0]) #there is only one atom per object now
-        self.__datacube_coverage[0].create(atoms = atoms)
+        self.__view["coverage"][0].create(atoms = atoms)
 
         #
         # Set default neighbourhood concept
@@ -94,8 +98,8 @@ class Datacube:
             "description": description 
         })
 
-        self.__datacube_coverage.append(Coverage)
-        self.__datacube_objects.append([])
+        self.__view["coverage"].append(Coverage)
+        self.__view["objects"].append([])
 
         return new_level
 
@@ -125,9 +129,10 @@ class Datacube:
         #
         object_list = []
 
-        # TODO: get this from coverage class
-        (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size) = Datacube.dataset.GetGeoTransform()
-
+        # 
+        # Get metadata (esp. getransform) from the coverage
+        #
+        (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size) = self.__view["coverage"][from_level].getMetadata()
 
         #
         # Iterate through all pixels and create an atom from it. Then, create an object for each atom.
@@ -135,19 +140,23 @@ class Datacube:
         #
         # Stolen from here: https://stackoverflow.com/questions/6967463/iterating-over-a-numpy-array/6967491#6967491
 
-        metadata = self.getDatasetMetadata()
+        metadata = self.__view["coverage"][from_level].getSize()
         size = metadata["coverage_x_size"] * metadata["coverage_y_size"]
         counter = 0
 
         progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
         
-        for (y_index, x_index), value in numpy.ndenumerate(self.__datacube_coverage[from_level].getStupidArray()):
+        for (x_index, y_index), value in numpy.ndenumerate(self.__view["coverage"][from_level].getStupidArray()):
             
             #
             # Extract coordinates, properties and values from atoms
             # Stolen from here: https://gis.stackexchange.com/questions/42790/gdal-and-python-how-to-get-coordinates-for-all-cells-having-a-specific-value/42846#42846
-            x_coord = x_index * x_size + upper_left_x + (x_size / 2) #add half the cell size
-            y_coord = y_index * y_size + upper_left_y + (y_size / 2) #to centre the point
+
+            #
+            # TODO: There is an issue with x/y lat/lon here.
+            #
+            lat = y_index * x_size + upper_left_x + (x_size / 2) #add half the cell size
+            lon = x_index * y_size + upper_left_y + (y_size / 2) #to centre the point
             # TODO: add time
             property = "class"
             value = int(value) ## TODO: remove int, this is due to the demo data
@@ -156,14 +165,14 @@ class Datacube:
             # Create an object and fill it with the atom
             #
             o = Object()
-            o.create([Atom({"lat": x_coord, "lon": y_coord},{"property": property, "value": value},{"x":x_index,"y":y_index})])
+            o.create([Atom({"lat": lat, "lon": lon},{"property": property, "value": value},{"x":x_index,"y":y_index})])
             
             object_list.append(o)
 
             counter += 1
             progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
     
-        self.__datacube_objects[to_level] = object_list
+        self.__view["objects"][to_level] = object_list
 
 
     def createCoverageView(self, from_level, to_level):
@@ -173,7 +182,7 @@ class Datacube:
 
         :param objects: list of objects
         """
-        old_stupid_array = self.__datacube_coverage[0].getStupidArray()
+        old_stupid_array = self.__view["coverage"][0].getStupidArray()
         x_size = len(old_stupid_array)
         y_size = len(old_stupid_array[0])
 
@@ -181,16 +190,26 @@ class Datacube:
         new_stupid_array = new_stupid_array * 0
         
         atoms = []
-        for o in self.__datacube_objects[from_level]:
+        for o in self.__view["objects"][from_level]:
             for a in o.getAtoms():
                 x,y = a.getIndex()
                 value = a.getObservationValue()
                 new_stupid_array[x][y] = value
                 atoms.append(a)
+        print("#####################1########################")
+        print(new_stupid_array[60][50])
 
-        coverage = Coverage(x_size, y_size, self.__datacube_coverage[0].getMetadata())
+        coverage = Coverage(x_size, y_size, self.__view["coverage"][0].getMetadata())
         coverage.create(atoms=atoms, array=new_stupid_array)
-        self.__datacube_coverage[to_level] = coverage
+
+        print("#############################################")
+        print(self.__view["coverage"][0].getStupidArray()[60][50])
+        print(self.__view["coverage"][0].getStupidArray()[50][60])
+        print(coverage.getStupidArray()[60][50])
+        print(coverage.getStupidArray()[50][60])
+        print("#############################################")
+
+        self.__view["coverage"][to_level] = coverage
 
 
     def getDatasetMetadata(self):
@@ -248,7 +267,7 @@ class Datacube:
             return value >= candidate
 
         objects = []
-        candidates = self.__datacube_objects[from_level]
+        candidates = self.__view["objects"][from_level]
 
         counter = 0
         size = len(candidates)
@@ -265,9 +284,9 @@ class Datacube:
         if create_level == True:
 
             level = self.createNewLevel()
-            self.__datacube_objects[level] = objects
+            self.__view["objects"][level] = objects
             self.createCoverageView(level, level)
-            coverage = self.__datacube_coverage[level]
+            coverage = self.__view["coverage"][level]
 
         else:
 
@@ -286,6 +305,9 @@ class Datacube:
         """
 
         ## TODO: use create new level swthc in select method
+        #
+        # (optional): Create new level. In this case, we use the interal method in the next step.
+        #
 
         #
         # STEP 1: Select all objects, which match the condition. If no objects
@@ -302,17 +324,12 @@ class Datacube:
         #
 
         #
-        # Aggregate/cluster using the Link class
+        # Aggregate/cluster using the Link class, it updates the levels accordingly
         #
-        l = Link("aggregation", self.__datacube_coverage[level])
+        l = Link("aggregation", self.__view, level)
 
         #
-        # Update the object view with the new objects
-        #
-        self.__datacube_objects[level] = l.getObjects()
-
-        #
-        # Returns the level
+        # (Optional) return information about the new level
         #
         return self.getLevel(level)
 
@@ -694,28 +711,26 @@ class Object:
 
 class Link:
 
-    def __init__(self, link_type, target, mutual = True):
+    def __init__(self, link_type, target, level, mutual = True):
+
         self.id = id(self)
         self.attributes = {"derived":{}}
         self.attributes["derived"]["link_type"] = link_type
 
         self.__new_objects = []
 
-        if type(target) == Coverage:
+        if link_type == "aggregation":
 
-            if link_type not in ["aggregation", "generalisation"]:
-                raise Exception("Linking coverage atoms requires aggregation or generalisation")
-            
-            self.__aggregation(target)
+            self.__aggregation(target["coverage"][level])
+            target["objects"][level] = self.__new_objects
+        
+        else:
+            pass
 
-        if type(target) == list:
-            
-            if len(target) != 2:
-                raise Exception ("Exactly 2 objects are expected to be part of the link")
-
-            target[0].linksWithObjects(link_type, target[1])
-            if mutual == True:
-                target[1].linksWithObjects(link_type, target[0])
+#   Do stuff here
+#            target[0].linksWithObjects(link_type, target[1])
+#            if mutual == True:
+#                target[1].linksWithObjects(link_type, target[0])
 
 
     def __aggregation(self, coverage):
@@ -767,15 +782,6 @@ class Link:
             o = Object()
             o.create(atoms)
             self.__new_objects.append(o)
-
-
-    def getObjects(self):
-        """
-        Returns the objects involved in the link (relationship/aggregation)
-
-        :return: list of objects
-        """                
-        return self.__new_objects
 
 
     def getID(self):
