@@ -1,5 +1,6 @@
 from rhino import Datacube
 from rhino import Atom
+from rhino import Object
 
 import rhino_helper
 
@@ -45,43 +46,43 @@ class TestRhinoHelper(unittest.TestCase):
         self.assertTrue("latitude " + str(lat) + " not allowed" == str(context.exception))
 
 
-# class TestDatacubes(unittest.TestCase):
+class TestDatacubes(unittest.TestCase):
 
-#     def setUp(self):
-#         self.dc = Datacube()
-#         self.dc.load('demodata/demolayer_lowres.tif', None)
+    def setUp(self):
+        self.dc = Datacube()
+        self.dc.load('demodata/demolayer_lowres.tif', None)
 
-#     def test_load(self):
-#         assert self.dc.dataset is not None
-    
-#     def test_level(self):
-#         # initial level
-#         level = {
-#             "level": 0,
-#             "name": "initial_level",
-#             "description": "no description available"
-#             }
+    def test_load(self):
+        assert self.dc.dataset is not None
 
-#         self.assertDictEqual(self.dc.getLevel(0), level)
+    def test_level(self):
+        #initial level
+        level = {
+            "level": 0,
+            "name": "initial_level",
+            "description": "no description available"
+            }
 
-#         new_level = {
-#             "level": 1,
-#             "name": "New test level",
-#             "description": "This is the description for the new test level"
-#         }
-#         self.dc.createNewLevel(new_level["name"],new_level["description"])
+        self.assertDictEqual(self.dc.getLevel(0), level)
 
-#         self.assertDictEqual(self.dc.getLevel(1), new_level)
+        new_level = {
+            "level": 1,
+            "name": "New test level",
+            "description": "This is the description for the new test level"
+        }
+        self.dc.createNewLevel(new_level["name"],new_level["description"])
 
-#     def test_aggregateandselectobjects(self):
-#         level = self.dc.aggregate(0, {"key":"class","value":1, "operator": "eq"})
-#         objects, coverage, level = self.dc.selectObjectsByCondition(level["level"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
-#         self.assertEqual(len(objects),1)
-#         self.assertEqual(level,2)
+        self.assertDictEqual(self.dc.getLevel(1), new_level)
 
-#     def test_getdatasetmetadata(self):
-#         metadata = self.dc.getDatasetMetadata()
-#         self.assertDictEqual(metadata, {'coverage_x_size': 100, 'coverage_y_grain': -0.020677661659999985, 'coverage_y_size': 100, 'coverage_x_grain': 0.02314663617999997})
+    def test_aggregateandselectobjects(self):
+        level = self.dc.aggregate(0, {"key":"class","value":1, "operator": "eq"})
+        objects, coverage, level = self.dc.selectObjectsByCondition(level["level"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
+        self.assertEqual(len(objects),1)
+        self.assertEqual(level,2)
+
+    def test_getdatasetmetadata(self):
+        metadata = self.dc.getDatasetMetadata()
+        self.assertDictEqual(metadata, {'coverage_x_size': 100, 'coverage_y_grain': -0.020677661659999985, 'coverage_y_size': 100, 'coverage_x_grain': 0.02314663617999997})
 
 class TestAtoms(unittest.TestCase):
     
@@ -132,6 +133,86 @@ class TestAtoms(unittest.TestCase):
 
         self.assertEqual(self.index["x"],_tested_index[0])
         self.assertEqual(self.index["y"],_tested_index[1])
+
+
+class TestObjects(unittest.TestCase):
+
+    def setUp(self):
+
+        self.dc = Datacube()
+        self.dc.load('demodata/demolayer_lowres.tif', None)
+        level = self.dc.aggregate(0, {"key":"class","value":1, "operator": "eq"})
+        objects, coverage, level = self.dc.selectObjectsByCondition(level["level"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
+        self.object2 = objects[0]
+
+        self.atoms = []
+        self.atoms.append(
+            Atom({"lat": 0, "lon": 0},{"property": "class", "value":0},{"x":0,"y":0}))
+        self.atoms.append(
+            Atom({"lat": 0, "lon": 10},{"property": "class", "value":0},{"x":0,"y":10}))
+        self.atoms.append(
+            Atom({"lat": 10, "lon": 10},{"property": "class", "value":0},{"x":10,"y":10}))
+        self.atoms.append(
+            Atom({"lat": 10, "lon": 0},{"property": "class", "value":0},{"x":10,"y":0}))
+
+        self.object1 = Object()
+        self.object1.create(self.atoms)
+
+    def test_create(self):
+
+        _tested_atoms = self.object1.atoms
+
+        self.assertEqual(len(self.atoms), len(_tested_atoms))
+
+        for i,a in enumerate(_tested_atoms):
+            coords1 = a.getCoordinates()
+            coords2 = self.atoms[i].getCoordinates()
+            self.assertEqual(coords1, coords2)
+
+
+    def test_getid(self):
+        self.assertGreaterEqual(self.object1.getID(),0)
+
+
+    def test_getatoms(self):
+
+        _tested_atoms = self.object1.getAtoms()
+
+        self.assertEqual(len(self.atoms), len(_tested_atoms))
+
+        for i,a in enumerate(_tested_atoms):
+            coords1 = a.getCoordinates()
+            coords2 = self.atoms[i].getCoordinates()
+            self.assertEqual(coords1, coords2)
+
+
+    def test_getnumberofatoms(self):
+
+        _tested_atoms_length = self.object1.getNumberOfAtoms()
+
+        self.assertEqual(len(self.atoms), _tested_atoms_length)
+
+
+    def test_getatomcoordinates(self):
+        self.assertEqual(
+            self.object1.getAtomCoordinates(),
+            [(0, 0), (0, 10), (10, 10), (10, 0)]
+        )
+
+
+    def test_getboundingbox(self):
+        self.assertEqual(
+            self.object1.getBoundingBox(),
+            shapely_geometry.Polygon([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
+        )
+
+
+    def test_getgeometry(self):
+        pass
+
+
+    def test_getattributevalue(self):
+        self.assertAlmostEqual(self.object2.getAttributeValue("compactness"),0.7219841742616753)
 
 if __name__ == '__main__':
     unittest.main()
