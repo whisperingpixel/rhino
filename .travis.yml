@@ -1,8 +1,15 @@
 language: python
 python:
   - "3.5"
-  - "3.6"  
 cache: pip
+addons:
+  apt:
+    packages:
+    - gdal-bin
+    - libgdal-dev
+env:
+    - CPLUS_INCLUDE_PATH=/usr/include/gdal
+    - C_INCLUDE_PATH=/usr/include/gdal
 install:
   - pip install -r requirements.txt
 script:
