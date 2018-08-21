@@ -1,6 +1,6 @@
 ![](https://travis-ci.org/whisperingpixel/rhino.svg?branch=master)
 
-RHINO
+#RHINO
 
 ## What is RHINO?
 
