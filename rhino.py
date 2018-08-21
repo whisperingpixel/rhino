@@ -19,6 +19,8 @@ class Datacube:
 
     dataset = None
 
+    config = {}
+
     object_model = {
         "derived":{
             "compactness": None,
@@ -49,7 +51,7 @@ class Datacube:
         #
         # TODO: Make proper config
         #
-        self.showProgress = False
+        Datacube.config["showProgress"] = False
 
     def load(self, connection, boundingbox):
         """
@@ -145,7 +147,7 @@ class Datacube:
         #
         # Stolen from here: https://stackoverflow.com/questions/6967463/iterating-over-a-numpy-array/6967491#6967491
 
-        if self.showProgress:
+        if Datacube.config["showProgress"]:
             metadata = self.__view["coverage"][from_level].getSize()
             size = metadata[0] * metadata[1]
             counter = 0            
@@ -174,7 +176,7 @@ class Datacube:
             
             object_list.append(o)
 
-            if self.showProgress: 
+            if Datacube.config["showProgress"]: 
                 counter += 1                          
                 progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
     
@@ -266,7 +268,7 @@ class Datacube:
         objects = []
         candidates = self.__view["objects"][from_level]
 
-        if self.showProgress:
+        if Datacube.config["showProgress"]:
             counter = 0
             size = len(candidates)
             progressBar(counter, size, prefix = 'Selecting objects with condition:', suffix = 'Complete', length = 50)
@@ -275,7 +277,7 @@ class Datacube:
             if locals()[condition["operator"]](obj.getAttributeValue(condition["key"]), condition["value"]): ## TODO: from condition!
                 objects.append(obj)
             
-            if self.showProgress:
+            if Datacube.config["showProgress"]:
                 counter += 1
                 progressBar(counter, size, prefix = 'Selecting objects with condition:', suffix = 'Complete', length = 50)
 
@@ -763,7 +765,7 @@ class Link:
         #
         # Aggregate the atoms to the atom_list
         #
-        if self.showProgress:
+        if Datacube.config["showProgress"]:
             counter = 0
             progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate)', suffix = 'Complete', length = 50)
 
@@ -774,7 +776,7 @@ class Link:
                 if object_number != 0:
                     atom_lists[object_number-1].append(atom)
 
-                if self.showProgress:
+                if Datacube.config["showProgress"]:
                     counter += 1
                     progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate)', suffix = 'Complete', length = 50)
             
