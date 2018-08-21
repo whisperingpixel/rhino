@@ -46,6 +46,10 @@ class Datacube:
 
         self.__levels = []
 
+        #
+        # TODO: Make proper config
+        #
+        self.showProgress = False
 
     def load(self, connection, boundingbox):
         """
@@ -141,11 +145,11 @@ class Datacube:
         #
         # Stolen from here: https://stackoverflow.com/questions/6967463/iterating-over-a-numpy-array/6967491#6967491
 
-        metadata = self.__view["coverage"][from_level].getSize()
-        size = metadata[0] * metadata[1]
-        counter = 0
-
-        progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
+        if self.showProgress:
+            metadata = self.__view["coverage"][from_level].getSize()
+            size = metadata[0] * metadata[1]
+            counter = 0            
+            progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
         
         for (x_index, y_index), value in numpy.ndenumerate(self.__view["coverage"][from_level].getStupidArray()):
             
@@ -170,8 +174,9 @@ class Datacube:
             
             object_list.append(o)
 
-            counter += 1
-            progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
+            if self.showProgress: 
+                counter += 1                          
+                progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
     
         self.__view["objects"][to_level] = object_list
 
@@ -261,16 +266,18 @@ class Datacube:
         objects = []
         candidates = self.__view["objects"][from_level]
 
-        counter = 0
-        size = len(candidates)
-        progressBar(counter, size, prefix = 'Selecting objects with condition:', suffix = 'Complete', length = 50)
+        if self.showProgress:
+            counter = 0
+            size = len(candidates)
+            progressBar(counter, size, prefix = 'Selecting objects with condition:', suffix = 'Complete', length = 50)
 
         for obj in candidates:
             if locals()[condition["operator"]](obj.getAttributeValue(condition["key"]), condition["value"]): ## TODO: from condition!
                 objects.append(obj)
             
-            counter += 1
-            progressBar(counter, size, prefix = 'Selecting objects with condition:', suffix = 'Complete', length = 50)
+            if self.showProgress:
+                counter += 1
+                progressBar(counter, size, prefix = 'Selecting objects with condition:', suffix = 'Complete', length = 50)
 
 
         if create_level == True:
@@ -756,8 +763,9 @@ class Link:
         #
         # Aggregate the atoms to the atom_list
         #
-        counter = 0
-        progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate)', suffix = 'Complete', length = 50)
+        if self.showProgress:
+            counter = 0
+            progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate)', suffix = 'Complete', length = 50)
 
         for x in range(x_size):
              for y in range(y_size):
@@ -766,9 +774,10 @@ class Link:
                 if object_number != 0:
                     atom_lists[object_number-1].append(atom)
 
-                counter += 1
-                progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate)', suffix = 'Complete', length = 50)
-        
+                if self.showProgress:
+                    counter += 1
+                    progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate)', suffix = 'Complete', length = 50)
+            
         #
         # Make objects
         #
