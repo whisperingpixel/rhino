@@ -1,3 +1,0 @@
-GDAL==1.11
-numpy
-shapely

@@ -1,18 +1,18 @@
 language: python
 python:
   - "3.5"
-cache: pip
-addons:
-  apt:
-    packages:
-    - gdal-bin
-    - libgdal-dev
-    - libproj-dev
-    - libgeos-dev
-env:
-    - CPLUS_INCLUDE_PATH=/usr/include/gdal
-    - C_INCLUDE_PATH=/usr/include/gdal
 install:
-  - pip install -r requirements.txt
+  - sudo apt-get update
+  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  # Useful for debugging any issues with conda
+  - conda info -a
+
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION gdal numpy shapely
+  - source activate test-environment
 script:
-  - python rhino-test.py
+- python rhino-test.py
