@@ -1,5 +1,4 @@
 gdal
 numpy
 shapely
-math
 copy
