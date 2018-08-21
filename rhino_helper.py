@@ -20,3 +20,21 @@ def progressBar (iteration, total, prefix = '', suffix = '', decimals = 1, lengt
     # Print New Line on Complete
     if iteration == total: 
         print()
+
+
+class InvalidCoordinatesError(Exception):
+
+    def __init__(self, message, errors = None):
+        super().__init__(message)
+
+        self.errors = errors
+
+def checkCoordinates(lat,lon):
+
+    if lat > 90 or lat < -90:
+        raise InvalidCoordinatesError("latitude " + str(lat) + " not allowed")
+    
+    if lon > 180 or lon < -180:
+        raise InvalidCoordinatesError("longitude " + str(lon) + " not allowed")
+    
+    return True

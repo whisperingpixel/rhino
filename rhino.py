@@ -7,6 +7,7 @@ import math
 import copy
 
 from rhino_helper import progressBar
+from rhino_helper import checkCoordinates
 
 ## TODO:
 # - generate global id for atoms
@@ -46,7 +47,7 @@ class Datacube:
         self.__levels = []
 
 
-    def load(self, boundingbox):
+    def load(self, connection, boundingbox):
         """
         Loads the rhino datacube.
 
@@ -54,7 +55,7 @@ class Datacube:
         """
         ## TODO: Load datacube from here. Be advised that this is a workaraound without a datacube
 
-        Datacube.dataset = gdal.Open('demodata/demolayer_lowres.tif')
+        Datacube.dataset = gdal.Open(connection)
         
         ## TODO: account for different bands
 
@@ -141,7 +142,7 @@ class Datacube:
         # Stolen from here: https://stackoverflow.com/questions/6967463/iterating-over-a-numpy-array/6967491#6967491
 
         metadata = self.__view["coverage"][from_level].getSize()
-        size = metadata["coverage_x_size"] * metadata["coverage_y_size"]
+        size = metadata[0] * metadata[1]
         counter = 0
 
         progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
@@ -155,8 +156,8 @@ class Datacube:
             #
             # TODO: There is an issue with x/y lat/lon here.
             #
-            lat = y_index * x_size + upper_left_x + (x_size / 2) #add half the cell size
-            lon = x_index * y_size + upper_left_y + (y_size / 2) #to centre the point
+            lon = y_index * x_size + upper_left_x + (x_size / 2) #add half the cell size
+            lat = x_index * y_size + upper_left_y + (y_size / 2) #to centre the point
             # TODO: add time
             property = "class"
             value = int(value) ## TODO: remove int, this is due to the demo data
@@ -317,7 +318,7 @@ class Datacube:
         #
         # Aggregate/cluster using the Link class, it updates the levels accordingly
         #
-        l = Link("aggregation", self.__view, level)
+        Link("aggregation", self.__view, level)
 
         #
         # (Optional) return information about the new level
@@ -340,6 +341,8 @@ class Atom:
     def __init__(self, coordinates, observation, index):
 
         ## TODO: Check value integrity
+        checkCoordinates(coordinates["lat"], coordinates["lon"])
+
         self.__tuple = {
             "id": id(self),
             "lat": coordinates["lat"],
