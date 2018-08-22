@@ -11,7 +11,7 @@ from rhino_helper import checkCoordinates
 
 ## TODO:
 # - generate global id for atoms
-# - createObjectView function is misleading
+# - createObjectViewFromCoverage function is misleading
 # - Handle different bands
 # - Handle time
 
@@ -72,23 +72,63 @@ class Datacube:
         # should not be further exposed to the user as the theory says it is actually a field of atoms.
         #
         band = Datacube.dataset.GetRasterBand(1)
-        initial_coverage = Coverage(Datacube.dataset.RasterXSize, Datacube.dataset.RasterYSize, Datacube.dataset.GetGeoTransform())
-        initial_coverage.create(array = numpy.array(band.ReadAsArray()))
-        self.__view["coverage"][level["depth"]] = initial_coverage
-        self.createObjectView(level["depth"], level["depth"])
-
-        #
-        # Use the atoms created by the object view for now
-        #
-        atoms = []
-        for o in self.__view["objects"][0]:
-            atoms.append(o.getAtoms()[0]) #there is only one atom per object now
-        self.__view["coverage"][0].create(atoms = atoms)
+        array = numpy.array(band.ReadAsArray())
+        atoms = self.extractAtoms(array)
+        self.setCoverageView(level["depth"], array, atoms, Datacube.dataset.GetGeoTransform())
+        self.createObjectViewFromCoverage(level["depth"], create_level=False, algorithm="pixelwise")
 
         #
         # Set default neighbourhood concept
         #
         Datacube.neighbourhood = Neighbourhood("4-connected")
+
+    def extractAtoms(self, target):
+
+        atoms = []
+
+        if type(target) == numpy.ndarray:
+
+            # 
+            # TODO: Question: Where does the geotrasnform come from
+            #
+            (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size) = Datacube.dataset.GetGeoTransform()
+
+            #
+            # Iterate through all pixels and create an atom from it. Then, create an object for each atom.
+            # Initial objects only consist of one single atom
+            #
+            # Stolen from here: https://stackoverflow.com/questions/6967463/iterating-over-a-numpy-array/6967491#6967491
+
+            if Datacube.config["show_progress"]:
+                counter = 0
+                size = len(target) * len(target[0])
+                progressBar(counter, size, prefix = 'Extract atoms:                     ', suffix = 'Complete', length = 50)
+        
+            for (x_index, y_index), value in numpy.ndenumerate(target):
+                
+                #
+                # Extract coordinates, properties and values from atoms
+                # Stolen from here: https://gis.stackexchange.com/questions/42790/gdal-and-python-how-to-get-coordinates-for-all-cells-having-a-specific-value/42846#42846
+
+                lon = y_index * x_size + upper_left_x + (x_size / 2) #add half the cell size
+                lat = x_index * y_size + upper_left_y + (y_size / 2) #to centre the point
+                # TODO: add time
+                property = "class"
+                value = int(value) ## TODO: remove int, this is due to the demo data
+
+                #
+                # Create an object and fill it with the atom
+                #
+                atoms.append(Atom({"lat": lat, "lon": lon},{"property": property, "value": value},{"x":x_index,"y":y_index}))
+                
+                if Datacube.config["show_progress"]: 
+                    counter += 1                          
+                    progressBar(counter, size, prefix = 'Extract atoms:                     ', suffix = 'Complete', length = 50)
+
+        else:
+            pass
+        
+        return atoms
 
 
     def createNewLevel(self, name ="no name available", description = "no description available"):
@@ -124,71 +164,89 @@ class Datacube:
         return None
 
 
-    def createObjectView(self, from_level, to_level):
+    def createObjectViewFromCoverage(self, from_level, create_level = True, algorithm = "pixelwise", parameters = None):
         """
-        Creates the object view in the rhino datacube.
+        Creates the coverage view in the rhino datacube.
 
-        :param layer: int
-        """
-
-        #
-        # Init an empty object view
-        #
-        object_list = []
-
-        # 
-        # Get metadata (esp. getransform) from the coverage
-        #
-        (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size) = self.__view["coverage"][from_level].getMetadata()
-
-        #
-        # Iterate through all pixels and create an atom from it. Then, create an object for each atom.
-        # Initial objects only consist of one single atom
-        #
-        # Stolen from here: https://stackoverflow.com/questions/6967463/iterating-over-a-numpy-array/6967491#6967491
-
-        if Datacube.config["show_progress"]:
-            metadata = self.__view["coverage"][from_level].getSize()
-            size = metadata[0] * metadata[1]
-            counter = 0            
-            progressBar(counter, size, prefix = 'Generate views:                    ', suffix = 'Complete', length = 50)
+        :param from_level: int, level from which the coverage should be taken
+        :param create_level: ...
+        :param algorithm: ...
+        :param parameters: ...
+        """        
+        if algorithm not in ["pixelwise", "aggregation"]:
+            raise Exception("Algorithm " + str(algorithm) + " is unknown")
         
-        for (x_index, y_index), value in numpy.ndenumerate(self.__view["coverage"][from_level].getStupidArray()):
+        coverage = self.getCoverageView(from_level)
+
+        if algorithm == "pixelwise":
+
+            atom_coverage = coverage.getCoverage()
+            object_list = []
+            for r in atom_coverage:
+                for a in r:
+                    o = Object()
+                    o.create([a])
+                    object_list.append(o)
             
-            #
-            # Extract coordinates, properties and values from atoms
-            # Stolen from here: https://gis.stackexchange.com/questions/42790/gdal-and-python-how-to-get-coordinates-for-all-cells-having-a-specific-value/42846#42846
-
-            #
-            # TODO: There is an issue with x/y lat/lon here.
-            #
-            lon = y_index * x_size + upper_left_x + (x_size / 2) #add half the cell size
-            lat = x_index * y_size + upper_left_y + (y_size / 2) #to centre the point
-            # TODO: add time
-            property = "class"
-            value = int(value) ## TODO: remove int, this is due to the demo data
-
-            #
-            # Create an object and fill it with the atom
-            #
-            o = Object()
-            o.create([Atom({"lat": lat, "lon": lon},{"property": property, "value": value},{"x":x_index,"y":y_index})])
+            self.setObjectView(from_level, object_list)
+        
+        if algorithm == "aggregation":
             
-            object_list.append(o)
+            condition = parameters
+            #
+            # STEP 1: Select all objects, which match the condition. If no objects
+            # match the condition, return here.
+            #
+            # This function generates a new level and views
+            #
+            objects, coverage, level = self.selectObjectsByCondition(from_level, condition, create_level=create_level)
+            if len(objects) == 0:
+                return
 
-            if Datacube.config["show_progress"]: 
-                counter += 1                          
-                progressBar(counter, size, prefix = 'Generate views:                    ', suffix = 'Complete', length = 50)
-    
-        self.__view["objects"][to_level] = object_list
+            #
+            # STEP 2: Aggregate and update views
+            #
+
+            #
+            # Aggregate/cluster using the Link class, it updates the levels accordingly
+            #
+            Link("aggregation", self.__view, level["depth"])
+
+            #
+            # return information about the new level
+            #
+            return self.getObjectView(level["depth"]), self.getCoverageView(level["depth"]), level
 
 
-    def createCoverageView(self, from_level, to_level):
+    def setObjectView(self, level, objects):
+        """
+        Sets the object view of a specific level. Will override existing object view.
+
+        :param level: int, target level
+        :param objects: list of objects
+        """                
+        self.__view["objects"][level] = objects
+
+
+    def getObjectView(self, from_level):
+        """
+        Returns the object view of a specific level.
+
+        :param from_level: int, target level
+        :return: dict
+        """                
+        return self.__view["objects"][from_level]
+
+
+    def createCoverageViewFromObjectView(self, from_level, create_level=False, algorithm = None, parameters = None):
         """
         Creates the coverage view in the rhino datacube.
         This can also be seen as masking, e.g., after selection of objects.
 
-        :param objects: list of objects
+        :param from_level: level from which the objects should be taken
+        :param to_level: target level
+        :param algorithm: None (currently unused)
+        :param parameters: None (currently unused)
         """
         old_stupid_array = self.__view["coverage"][0].getStupidArray()
         x_size = len(old_stupid_array)
@@ -205,19 +263,43 @@ class Datacube:
                 new_stupid_array[x][y] = value
                 atoms.append(a)
 
-        coverage = Coverage(x_size, y_size, self.__view["coverage"][0].getMetadata())
+        coverage = Coverage(x_size, y_size, self.__view["coverage"][0].getGeoTransform())
         coverage.create(atoms=atoms, array=new_stupid_array)
 
-        self.__view["coverage"][to_level] = coverage
+        self.__view["coverage"][from_level] = coverage
+
+
+    def setCoverageView(self, level, array, atoms, geotransform = None):
+        """
+        Sets the coverage of a specific level. Will override existing coverage.
+
+        :param level: int, target level
+        :param array: array (i.e. stupid array)
+        :param atoms: atoms
+        :param geotransform: geotransfrom
+        :return: dict
+        """        
+        if geotransform == None:
+            if len(self.__view["coverage"]) == 0:
+                raise Exception("No geotransform found")
+            geotransform = self.__view["coverage"][0].getGeoTransform()
+
+        x_size = len(array)
+        y_size = len(array[0])
+        coverage = Coverage(x_size,y_size, geotransform)
+        coverage.create(array=array, atoms=atoms)
+        self.__view["coverage"][level] = coverage
 
 
     def getCoverageView(self, from_level):
+        """
+        Returns the coverage view of a specific level.
+
+        :param from_level: int, target level
+        :return: dict
+        """        
         return self.__view["coverage"][from_level]
     
-
-    def getObjectView(self, from_level):
-        return self.__view["objects"][from_level]
-
 
     def getDatasetMetadata(self):
         """
@@ -241,9 +323,6 @@ class Datacube:
     #    neighbourhood = Neighbourhood(concept)
     
 
-    #
-    # These are user-friendly wrapper-functions
-    #
     def selectObjectsByCondition(self, from_level, condition, create_level = False):
         """
         Select the objects in the object view of the rhino datacube, which match
@@ -298,7 +377,7 @@ class Datacube:
 
             level = self.createNewLevel()
             self.__view["objects"][level["depth"]] = objects
-            self.createCoverageView(level["depth"], level["depth"])
+            self.createCoverageViewFromObjectView(level["depth"])
             coverage = self.__view["coverage"][level["depth"]]
 
         else:
@@ -309,43 +388,24 @@ class Datacube:
         return objects, coverage, level
 
 
-    def aggregate(self, from_level, condition):
+    def execute(self, procedure, parameters=None, level = 0):
         """
-        Aggregates ? based on a certain condition.
+        This is a wrapper to execute a procedure either on the object-based or on the coverage-based view.
+        It creates a new level by default
 
-        :param condition: ?
-        :return: ?
+        :param procedure: procedure to be executed
+        :param parameter: optional parameter for the procedure
         """
+        existing_procedures = ["aggregation", "selection"]
 
-        ## TODO: use create new level swthc in select method
-        #
-        # (optional): Create new level. In this case, we use the interal method in the next step.
-        #
-
-        #
-        # STEP 1: Select all objects, which match the condition. If no objects
-        # match the condition, return here.
-        #
-        # This function generates a new level and views
-        #
-        objects, dummy_coverage, level = self.selectObjectsByCondition(from_level, condition, create_level=True)
-        if len(objects) == 0:
-            return
-
-        #
-        # STEP 2: Aggregate and update views
-        #
-
-        #
-        # Aggregate/cluster using the Link class, it updates the levels accordingly
-        #
-        Link("aggregation", self.__view, level["depth"])
-
-        #
-        # (Optional) return information about the new level
-        #
-        return level
-
+        if procedure not in existing_procedures:
+            raise Exception("Choose one of " + ",".join(existing_procedures))
+        
+        if procedure == "aggregation":
+            return self.createObjectViewFromCoverage(level, algorithm = "aggregation", parameters = {"key":"class","value":1, "operator": "eq"}, create_level = True)
+        
+        if procedure == "selection":
+            return self.selectObjectsByCondition(level, parameters, create_level = True)
 
     def executeQuery(self, command):
         """
@@ -525,7 +585,7 @@ class Coverage:
         return (self.x_size, self.y_size)
 
 
-    def getMetadata(self):
+    def getGeoTransform(self):
         """
         Returns the metadata (geotransform) of the coverage.
 

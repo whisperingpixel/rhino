@@ -56,8 +56,8 @@ class TestDatacubes(unittest.TestCase):
         self.dc = Datacube()
         self.dc.load('demodata/demolayer_lowres.tif', None)
 
-    # def test_load(self):
-    #     assert self.dc.dataset is not None
+    def test_load(self):
+        assert self.dc.dataset is not None
 
     def test_level(self):
         #initial level
@@ -79,7 +79,7 @@ class TestDatacubes(unittest.TestCase):
         self.assertDictEqual(self.dc.getLevel(1), new_level)
 
     def test_aggregateandselectobjects(self):
-        level = self.dc.aggregate(0, {"key":"class","value":1, "operator": "eq"})
+        objects, coverage, level = self.dc.createObjectViewFromCoverage(0, algorithm = "aggregation", parameters = {"key":"class","value":1, "operator": "eq"}, create_level=True, )
         objects, coverage, level = self.dc.selectObjectsByCondition(level["depth"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
         self.assertEqual(len(objects),1)
         self.assertEqual(level["depth"],2)
@@ -117,7 +117,7 @@ class TestDatacubes(unittest.TestCase):
         #
         # STEP 2: Aggregate. The coverage should cover only pixels with class value==1.
         #
-        level = self.dc.aggregate(0, {"key":"class","value":1, "operator": "eq"})
+        objects, coverage, level = self.dc.createObjectViewFromCoverage(0, algorithm = "aggregation", parameters = {"key":"class","value":1, "operator": "eq"}, create_level=True)
 
         testdataset = gdal.Open("demodata/demolayer_lowres_result_level_1.tif")
         band = testdataset.GetRasterBand(1)
@@ -202,7 +202,7 @@ class TestObjects(unittest.TestCase):
 
         self.dc = Datacube()
         self.dc.load('demodata/demolayer_lowres.tif', None)
-        level = self.dc.aggregate(0, {"key":"class","value":1, "operator": "eq"})
+        objects, coverage, level = self.dc.createObjectViewFromCoverage(0,  algorithm = "aggregation", parameters = {"key":"class","value":1, "operator": "eq"},create_level=True)
         objects, coverage, level = self.dc.selectObjectsByCondition(level["depth"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
         self.object2 = objects[0]
 
