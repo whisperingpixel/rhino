@@ -39,7 +39,7 @@ class Datacube:
 
     neighbourhood = None
 
-    def __init__(self):
+    def __init__(self, show_progress = False):
 
         self.__view = {
             "coverage": [],
@@ -51,7 +51,7 @@ class Datacube:
         #
         # TODO: Make proper config
         #
-        Datacube.config["show_progress"] = False
+        Datacube.config["show_progress"] = show_progress
 
     def load(self, connection, boundingbox):
         """
@@ -151,7 +151,7 @@ class Datacube:
             metadata = self.__view["coverage"][from_level].getSize()
             size = metadata[0] * metadata[1]
             counter = 0            
-            progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
+            progressBar(counter, size, prefix = 'Generate views:                    ', suffix = 'Complete', length = 50)
         
         for (x_index, y_index), value in numpy.ndenumerate(self.__view["coverage"][from_level].getStupidArray()):
             
@@ -178,7 +178,7 @@ class Datacube:
 
             if Datacube.config["show_progress"]: 
                 counter += 1                          
-                progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
+                progressBar(counter, size, prefix = 'Generate views:                    ', suffix = 'Complete', length = 50)
     
         self.__view["objects"][to_level] = object_list
 
@@ -209,6 +209,14 @@ class Datacube:
         coverage.create(atoms=atoms, array=new_stupid_array)
 
         self.__view["coverage"][to_level] = coverage
+
+
+    def getCoverageView(self, from_level):
+        return self.__view["coverage"][from_level]
+    
+
+    def getObjectView(self, from_level):
+        return self.__view["objects"][from_level]
 
 
     def getDatasetMetadata(self):
@@ -271,7 +279,7 @@ class Datacube:
         if Datacube.config["show_progress"]:
             counter = 0
             size = len(candidates)
-            progressBar(counter, size, prefix = 'Selecting objects with condition:', suffix = 'Complete', length = 50)
+            progressBar(counter, size, prefix = 'Selecting objects with condition:  ', suffix = 'Complete', length = 50)
 
         for obj in candidates:
 
@@ -279,7 +287,7 @@ class Datacube:
                 objects.append(obj)
             if Datacube.config["show_progress"]:
                 counter += 1
-                progressBar(counter, size, prefix = 'Selecting objects with condition:', suffix = 'Complete', length = 50)
+                progressBar(counter, size, prefix = 'Selecting objects with condition:  ', suffix = 'Complete', length = 50)
 
         if condition["key"] == "compactness":
             f = open("result.txt", "w")
@@ -299,10 +307,6 @@ class Datacube:
             coverage = None
     
         return objects, coverage, level
-
-
-    def getCoverageView(self, from_level):
-        return self.__view["coverage"][from_level]
 
 
     def aggregate(self, from_level, condition):
@@ -779,7 +783,7 @@ class Link:
         #
         if Datacube.config["show_progress"]:
             counter = 0
-            progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate)', suffix = 'Complete', length = 50)
+            progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
 
         for x in range(x_size):
              for y in range(y_size):
@@ -790,7 +794,7 @@ class Link:
 
                 if Datacube.config["show_progress"]:
                     counter += 1
-                    progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate)', suffix = 'Complete', length = 50)
+                    progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
             
         #
         # Make objects
