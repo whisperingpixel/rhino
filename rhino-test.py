@@ -140,8 +140,6 @@ class TestDatacubes(unittest.TestCase):
 
         coverage = self.dc.getCoverageView(level["depth"])
         coverage_array = coverage.getStupidArray()
-        import png
-        png.from_array(coverage_array.tolist(), 'L').save("result.png")
 
         for (x_index, y_index), value in numpy.ndenumerate(numpy_array):
             self.assertEqual(coverage_array[x_index][y_index], value)
