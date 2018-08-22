@@ -32,7 +32,9 @@ class Datacube:
     }
 
     link_model = {
-        "derived": ["link_type"],
+        "derived": {
+            "link_type": None
+        },
         "modelled": []
     }
 
@@ -787,8 +789,7 @@ class Link:
     def __init__(self, link_type, target, level, mutual = True):
 
         self.id = id(self)
-        self.attributes = {"derived":{}}
-        self.attributes["derived"]["link_type"] = link_type
+        self.attributes = copy.deepcopy(Datacube.link_model)
 
         self.__new_objects = []
 
