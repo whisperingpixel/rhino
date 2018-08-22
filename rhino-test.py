@@ -1,10 +1,14 @@
 from rhino import Datacube
 from rhino import Atom
 from rhino import Object
+from rhino import Coverage
 
 import rhino_helper
 
 from shapely import geometry as shapely_geometry
+import gdal
+import numpy
+
 import unittest
 
 class TestRhinoHelper(unittest.TestCase):
@@ -52,13 +56,13 @@ class TestDatacubes(unittest.TestCase):
         self.dc = Datacube()
         self.dc.load('demodata/demolayer_lowres.tif', None)
 
-    def test_load(self):
-        assert self.dc.dataset is not None
+    # def test_load(self):
+    #     assert self.dc.dataset is not None
 
     def test_level(self):
         #initial level
         level = {
-            "level": 0,
+            "depth": 0,
             "name": "initial_level",
             "description": "no description available"
             }
@@ -66,7 +70,7 @@ class TestDatacubes(unittest.TestCase):
         self.assertDictEqual(self.dc.getLevel(0), level)
 
         new_level = {
-            "level": 1,
+            "depth": 1,
             "name": "New test level",
             "description": "This is the description for the new test level"
         }
@@ -76,13 +80,72 @@ class TestDatacubes(unittest.TestCase):
 
     def test_aggregateandselectobjects(self):
         level = self.dc.aggregate(0, {"key":"class","value":1, "operator": "eq"})
-        objects, coverage, level = self.dc.selectObjectsByCondition(level["level"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
+        objects, coverage, level = self.dc.selectObjectsByCondition(level["depth"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
         self.assertEqual(len(objects),1)
-        self.assertEqual(level,2)
+        self.assertEqual(level["depth"],2)
 
     def test_getdatasetmetadata(self):
         metadata = self.dc.getDatasetMetadata()
         self.assertDictEqual(metadata, {'coverage_x_size': 100, 'coverage_y_grain': -0.020677661659999985, 'coverage_y_size': 100, 'coverage_x_grain': 0.02314663617999997})
+
+    def test_getcoverageview(self):
+
+        testdataset = gdal.Open("demodata/demolayer_lowres.tif")
+        band = testdataset.GetRasterBand(1)
+        numpy_array = numpy.array(band.ReadAsArray())
+
+        coverage = self.dc.getCoverageView(0)
+        coverage_array = coverage.getStupidArray()
+
+        for (x_index, y_index), value in numpy.ndenumerate(numpy_array):
+            self.assertEqual(coverage_array[x_index][y_index], value)
+
+    def test_demodata_workflow_coverage(self):
+        #
+        # STEP 1: Import data. The coverage should be exactly the same as the input.
+        #
+        testdataset = gdal.Open("demodata/demolayer_lowres_result_level_0.tif")
+        band = testdataset.GetRasterBand(1)
+        numpy_array = numpy.array(band.ReadAsArray())
+
+        coverage = self.dc.getCoverageView(0)
+        coverage_array = coverage.getStupidArray()
+
+        for (x_index, y_index), value in numpy.ndenumerate(numpy_array):
+            self.assertEqual(coverage_array[x_index][y_index], value)
+
+        #
+        # STEP 2: Aggregate. The coverage should cover only pixels with class value==1.
+        #
+        level = self.dc.aggregate(0, {"key":"class","value":1, "operator": "eq"})
+
+        testdataset = gdal.Open("demodata/demolayer_lowres_result_level_1.tif")
+        band = testdataset.GetRasterBand(1)
+        numpy_array = numpy.array(band.ReadAsArray())
+
+        coverage = self.dc.getCoverageView(level["depth"])
+        coverage_array = coverage.getStupidArray()
+
+        for (x_index, y_index), value in numpy.ndenumerate(numpy_array):
+            self.assertEqual(coverage_array[x_index][y_index], value)
+
+        #
+        # STEP 3: Select: The coverage should contain only pixels with class value == 1 and the object's compactness value >= 0.5.
+        #
+        objects, coverage, level = self.dc.selectObjectsByCondition(level["depth"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
+
+        testdataset = gdal.Open("demodata/demolayer_lowres_result_level_2.tif")
+        band = testdataset.GetRasterBand(1)
+        numpy_array = numpy.array(band.ReadAsArray())
+
+        coverage = self.dc.getCoverageView(level["depth"])
+        coverage_array = coverage.getStupidArray()
+        import png
+        png.from_array(coverage_array.tolist(), 'L').save("result.png")
+
+        for (x_index, y_index), value in numpy.ndenumerate(numpy_array):
+            self.assertEqual(coverage_array[x_index][y_index], value)
+
 
 class TestAtoms(unittest.TestCase):
     
@@ -142,7 +205,7 @@ class TestObjects(unittest.TestCase):
         self.dc = Datacube()
         self.dc.load('demodata/demolayer_lowres.tif', None)
         level = self.dc.aggregate(0, {"key":"class","value":1, "operator": "eq"})
-        objects, coverage, level = self.dc.selectObjectsByCondition(level["level"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
+        objects, coverage, level = self.dc.selectObjectsByCondition(level["depth"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
         self.object2 = objects[0]
 
         self.atoms = []
