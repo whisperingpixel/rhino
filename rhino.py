@@ -11,7 +11,6 @@ from rhino_helper import checkCoordinates
 
 ## TODO:
 # - generate global id for atoms
-# - createObjectViewFromCoverage function is misleading
 # - Handle different bands
 # - Handle time
 
@@ -199,7 +198,7 @@ class Datacube:
             #
             # This function generates a new level and views
             #
-            objects, coverage, level = self.selectObjectsByCondition(from_level, condition, create_level=create_level)
+            objects, coverage, level = self.selectByCondition(from_level, condition, create_level=create_level)
             if len(objects) == 0:
                 return
 
@@ -208,7 +207,7 @@ class Datacube:
             #
 
             #
-            # Aggregate/cluster using the Link class, it updates the levels accordingly
+            # Aggregate/cluster using the Link class, it updates the levels accordingly ##TODO: Not sure whether this is good to have it hidden implicitly there
             #
             Link("aggregation", self.__view, level["depth"])
 
@@ -323,7 +322,7 @@ class Datacube:
     #    neighbourhood = Neighbourhood(concept)
     
 
-    def selectObjectsByCondition(self, from_level, condition, create_level = False):
+    def selectByCondition(self, from_level, condition, create_level = False):
         """
         Select the objects in the object view of the rhino datacube, which match
         a certain condition.
@@ -368,11 +367,6 @@ class Datacube:
                 counter += 1
                 progressBar(counter, size, prefix = 'Selecting objects with condition:  ', suffix = 'Complete', length = 50)
 
-        if condition["key"] == "compactness":
-            f = open("result.txt", "w")
-            f.write(str(objects[0].getGeometry())  + "\n")
-            f.close()
-
         if create_level == True:
 
             level = self.createNewLevel()
@@ -405,7 +399,7 @@ class Datacube:
             return self.createObjectViewFromCoverage(level, algorithm = "aggregation", parameters = {"key":"class","value":1, "operator": "eq"}, create_level = True)
         
         if procedure == "selection":
-            return self.selectObjectsByCondition(level, parameters, create_level = True)
+            return self.selectByCondition(level, parameters, create_level = True)
 
     def executeQuery(self, command):
         """
