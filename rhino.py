@@ -51,7 +51,7 @@ class Datacube:
         #
         # TODO: Make proper config
         #
-        Datacube.config["showProgress"] = False
+        Datacube.config["show_progress"] = False
 
     def load(self, connection, boundingbox):
         """
@@ -74,8 +74,8 @@ class Datacube:
         band = Datacube.dataset.GetRasterBand(1)
         initial_coverage = Coverage(Datacube.dataset.RasterXSize, Datacube.dataset.RasterYSize, Datacube.dataset.GetGeoTransform())
         initial_coverage.create(array = numpy.array(band.ReadAsArray()))
-        self.__view["coverage"][level] = initial_coverage
-        self.createObjectView(level, level)
+        self.__view["coverage"][level["depth"]] = initial_coverage
+        self.createObjectView(level["depth"], level["depth"])
 
         #
         # Use the atoms created by the object view for now
@@ -98,9 +98,9 @@ class Datacube:
         :param name: string; name of the level (optional)
         :param description: string; decription of the level (optional)
         """        
-        new_level = len(self.__levels)
+        depth = len(self.__levels)
         self.__levels.append({
-            "level": new_level,
+            "depth": depth,
             "name": name,
             "description": description 
         })
@@ -108,7 +108,7 @@ class Datacube:
         self.__view["coverage"].append(Coverage)
         self.__view["objects"].append([])
 
-        return new_level
+        return self.__levels[depth]
 
 
     def getLevel(self, depth):
@@ -119,7 +119,7 @@ class Datacube:
         :return: dict
         """
         for level in self.__levels:
-            if level["level"] == depth:
+            if level["depth"] == depth:
                 return level
         return None
 
@@ -147,7 +147,7 @@ class Datacube:
         #
         # Stolen from here: https://stackoverflow.com/questions/6967463/iterating-over-a-numpy-array/6967491#6967491
 
-        if Datacube.config["showProgress"]:
+        if Datacube.config["show_progress"]:
             metadata = self.__view["coverage"][from_level].getSize()
             size = metadata[0] * metadata[1]
             counter = 0            
@@ -176,7 +176,7 @@ class Datacube:
             
             object_list.append(o)
 
-            if Datacube.config["showProgress"]: 
+            if Datacube.config["show_progress"]: 
                 counter += 1                          
                 progressBar(counter, size, prefix = 'Generate views:', suffix = 'Complete', length = 50)
     
@@ -268,26 +268,30 @@ class Datacube:
         objects = []
         candidates = self.__view["objects"][from_level]
 
-        if Datacube.config["showProgress"]:
+        if Datacube.config["show_progress"]:
             counter = 0
             size = len(candidates)
             progressBar(counter, size, prefix = 'Selecting objects with condition:', suffix = 'Complete', length = 50)
 
         for obj in candidates:
-            if locals()[condition["operator"]](obj.getAttributeValue(condition["key"]), condition["value"]): ## TODO: from condition!
+
+            if locals()[condition["operator"]](obj.getAttributeValue(condition["key"]), condition["value"]):
                 objects.append(obj)
-            
-            if Datacube.config["showProgress"]:
+            if Datacube.config["show_progress"]:
                 counter += 1
                 progressBar(counter, size, prefix = 'Selecting objects with condition:', suffix = 'Complete', length = 50)
 
+        if condition["key"] == "compactness":
+            f = open("result.txt", "w")
+            f.write(str(objects[0].getGeometry())  + "\n")
+            f.close()
 
         if create_level == True:
 
             level = self.createNewLevel()
-            self.__view["objects"][level] = objects
-            self.createCoverageView(level, level)
-            coverage = self.__view["coverage"][level]
+            self.__view["objects"][level["depth"]] = objects
+            self.createCoverageView(level["depth"], level["depth"])
+            coverage = self.__view["coverage"][level["depth"]]
 
         else:
 
@@ -295,6 +299,10 @@ class Datacube:
             coverage = None
     
         return objects, coverage, level
+
+
+    def getCoverageView(self, from_level):
+        return self.__view["coverage"][from_level]
 
 
     def aggregate(self, from_level, condition):
@@ -327,12 +335,12 @@ class Datacube:
         #
         # Aggregate/cluster using the Link class, it updates the levels accordingly
         #
-        Link("aggregation", self.__view, level)
+        Link("aggregation", self.__view, level["depth"])
 
         #
         # (Optional) return information about the new level
         #
-        return self.getLevel(level)
+        return level
 
 
     def executeQuery(self, command):
@@ -349,14 +357,14 @@ class Atom:
 
     def __init__(self, coordinates, observation, index):
 
-        ## TODO: Check value integrity
+        ## TODO: Check value integrity and trow exceptions
         checkCoordinates(coordinates["lat"], coordinates["lon"])
 
         self.__tuple = {
             "id": id(self),
             "lat": coordinates["lat"],
             "lon": coordinates["lon"],
-            "geometry": shapely_geometry.Point(coordinates["lat"],coordinates["lon"]),
+            "geometry": shapely_geometry.Point(coordinates["lon"],coordinates["lat"]),
             "property": observation["property"],
             "value": observation["value"],
             "x_index": index["x"],
@@ -629,7 +637,7 @@ class Object:
             multipoints = shapely_geometry.MultiPoint(list(points))
 
             #
-            # TODO: Search for better algorithm
+            # TODO: Search for better algorithm to delineate border
             #
             buf = Datacube.neighbourhood.getMaxDistance()
             geometry = operations.cascaded_union(multipoints.buffer(buf))
@@ -669,8 +677,10 @@ class Object:
         """
         return self.id
 
+
     def getAttributeValue(self, attribute):
         if attribute in self.__attributes["derived"]:
+
             if attribute == "compactness":
 
                 geom = self.getGeometry()
@@ -678,10 +688,12 @@ class Object:
 
         else:
             if attribute in self.__attributes["modelled"]:
+
                 atomProperties = []
                 for a in self.atoms:
                     atomProperties.append(a.getObservationValue()) ## TODO: return based on the attribute arg
-                return atomProperties[0] ## TODO: this returns the first one, make it user-defined                
+                return atomProperties[0] ## TODO: this returns the first one, make it user-defined, such as avg, min, max, median, ...
+
             else:
                 return None
         
@@ -765,7 +777,7 @@ class Link:
         #
         # Aggregate the atoms to the atom_list
         #
-        if Datacube.config["showProgress"]:
+        if Datacube.config["show_progress"]:
             counter = 0
             progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate)', suffix = 'Complete', length = 50)
 
@@ -776,7 +788,7 @@ class Link:
                 if object_number != 0:
                     atom_lists[object_number-1].append(atom)
 
-                if Datacube.config["showProgress"]:
+                if Datacube.config["show_progress"]:
                     counter += 1
                     progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate)', suffix = 'Complete', length = 50)
             
