@@ -16,6 +16,6 @@ install:
   - source activate test-environment
   - conda install -c conda-forge codecov  
 script:
-  - coverage run -m rhino/test_rhino
+  - coverage run -m rhino.test_rhino
 after_success:
   - codecov
