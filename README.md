@@ -38,6 +38,51 @@ Determining which objects are linked (e.g. aggregated) is difficult and is not o
 
 In the best case you can consider it as "experimental". It is currently not operational and the main intention (for now) is also not to make it operational. The main reason is that it is very slow since it more or less directly implements the GIScience theory without considering performance aspects.
 
+### Usage
+
+If you want to use it, the following environment is required:
+
+Interpreter: 
+
+```bash
+python >3.5
+```
+
+Packages:
+
+```bash
+gdal
+numpy
+shapely
+scikit-image
+```
+
+Clone the repository by using the following command:
+
+```bash
+git clone git@github.com:whisperingpixel/rhino.git
+```
+
+And set up your environment on conda or whatever you want to have. Optionally, you can run the tests:
+
+```bash
+python ./rhino-test.py
+```
+
+Try out the demo, which is provided in the repository. See the result, which is generated:
+
+```
+python ./demo.py
+```
+
+
+
+### Structure
+
+RHINO is completely object-oriented. The main classes are in the file *rhino.py*, the files *rhino_tools.py* contain additional procedures, which are not directly related to what RHINO does and are helpers (such as printing a nice progress bar etc).
+
+Everything of the aforementioned type Datacube, Atom, Object, Coverage, Link, Neighbourhood is a class in rhino.py
+
 ## Is it possible to share, have or steal it?
 
 This is the core of my PhD ... input is welcome, but please don't steal it or at least wait until I got my PhD :-)
@@ -51,3 +96,16 @@ Goodchild, M. F., Yuan, M., & Cova, T. J. (2007). Towards a general theory of ge
 Kuhn, W., 2012. Core concepts of spatial information for transdisciplinary research. *International Journal of Geographical Information Science*, *26*(12), pp.2267-2276. https://www.tandfonline.com/doi/full/10.1080/13658816.2012.722637
 
 Lang, S., Kienberger, S., Tiede, D., Hagenlocher, M. and Pernkopf, L., 2014. Geons–domain-specific regionalization of space. *Cartography and Geographic Information Science*, *41*(3), pp.214-226. https://www.tandfonline.com/doi/abs/10.1080/15230406.2014.902755
+
+# Contact
+
+Please write me if you have any questions or encounter any problems with RHINO.
+
+```
+Mr. Martin Sudmanns
+University of Salzburg
+Department of Geoinformatics - Z_GIS
+Integrated Spatial Analysis
+martin.sudmanns@sbg.ac.at
+```
+
