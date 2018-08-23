@@ -1,4 +1,4 @@
-![](https://travis-ci.org/whisperingpixel/rhino.svg?branch=master) [![codecov](https://codecov.io/gh/whisperingpixel/rhino/branch/master/graph/badge.svg)](https://codecov.io/gh/whisperingpixel/rhino)
+![](https://travis-ci.org/whisperingpixel/rhino.svg?branch=master) [![codecov](https://codecov.io/gh/whisperingpixel/rhino/branch/master/graph/badge.svg)](https://codecov.io/gh/whisperingpixel/rhino) [![Documentation Status](https://readthedocs.org/projects/rhino-doc/badge/?version=latest)](https://rhino-doc.readthedocs.io/en/latest/?badge=latest)
 
 # RHINO
 
@@ -66,7 +66,7 @@ git clone git@github.com:whisperingpixel/rhino.git
 And set up your environment on conda or whatever you want to have. Optionally, you can run the tests:
 
 ```bash
-python -m rhino/rhino-test
+python ./rhino-test.py
 ```
 
 Try out the demo, which is provided in the repository. See the result, which is generated:
@@ -97,7 +97,7 @@ Kuhn, W., 2012. Core concepts of spatial information for transdisciplinary resea
 
 Lang, S., Kienberger, S., Tiede, D., Hagenlocher, M. and Pernkopf, L., 2014. Geons–domain-specific regionalization of space. *Cartography and Geographic Information Science*, *41*(3), pp.214-226. https://www.tandfonline.com/doi/abs/10.1080/15230406.2014.902755
 
-## Contact
+# Contact
 
 Please write me if you have any questions or encounter any problems with RHINO.
 
