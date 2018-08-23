@@ -512,7 +512,7 @@ class Atom:
         """
         return (self.__tuple["x_index"], self.__tuple["y_index"])
 
-    def print(self):
+    def _print(self):
         print(self.__tuple)
 
 class Coverage:
@@ -771,13 +771,13 @@ class Object:
         ## TODO: rais exception
 
 
-    def print(self):
+    def _print(self):
         """
         Prints the object.
         """                
         print("{ id: " + str(self.id) + ", atoms: ") 
         for a in self.atoms:
-            a.print()
+            a._print()
         print(",links: ")
         for l in self.links:
             print(l)
