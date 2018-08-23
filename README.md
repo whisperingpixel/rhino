@@ -1,4 +1,4 @@
-![](https://travis-ci.org/whisperingpixel/rhino.svg?branch=master)
+![](https://travis-ci.org/whisperingpixel/rhino.svg?branch=master) [![codecov](https://codecov.io/gh/whisperingpixel/rhino/branch/master/graph/badge.svg)](https://codecov.io/gh/whisperingpixel/rhino)
 
 # RHINO
 
