@@ -1,4 +1,4 @@
-import rhino
+from rhino import rhino
 import datetime
 import png
 

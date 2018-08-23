@@ -1,9 +1,5 @@
-from rhino import Datacube
-from rhino import Atom
-from rhino import Object
-from rhino import Coverage
-
-import rhino_tools
+from rhino.rhino import *
+from rhino.rhino_tools import *
 
 from shapely import geometry as shapely_geometry
 import gdal
@@ -22,31 +18,31 @@ class TestRhinoHelper(unittest.TestCase):
         lat = 100.0
         lon = 0.0
         with self.assertRaises(rhino_tools.InvalidCoordinatesError) as context:
-            rhino_tools.checkCoordinates(lat, lon)
+           checkCoordinates(lat, lon)
         self.assertEqual("latitude " + str(lat) + " not allowed", str(context.exception))
 
         lat = -100.0
         lon = 0.0
         with self.assertRaises(rhino_tools.InvalidCoordinatesError) as context:
-            rhino_tools.checkCoordinates(lat, lon)
+           checkCoordinates(lat, lon)
         self.assertTrue("latitude " + str(lat) + " not allowed" == str(context.exception))
 
         lat = 0.0
         lon = 200.0
         with self.assertRaises(rhino_tools.InvalidCoordinatesError) as context:
-            rhino_tools.checkCoordinates(lat, lon)
+           checkCoordinates(lat, lon)
         self.assertTrue("longitude " + str(lon) + " not allowed" == str(context.exception))
 
         lat = 0.0
         lon = -200.0
         with self.assertRaises(rhino_tools.InvalidCoordinatesError) as context:
-            rhino_tools.checkCoordinates(lat, lon)
+           checkCoordinates(lat, lon)
         self.assertTrue("longitude " + str(lon) + " not allowed" == str(context.exception))
 
         lat = 100.0
         lon = 200.0
         with self.assertRaises(rhino_tools.InvalidCoordinatesError) as context:
-            rhino_tools.checkCoordinates(lat, lon)
+           checkCoordinates(lat, lon)
         self.assertTrue("latitude " + str(lat) + " not allowed" == str(context.exception))
 
 

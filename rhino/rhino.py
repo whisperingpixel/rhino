@@ -2,12 +2,11 @@ import gdal
 import numpy
 import shapely
 import shapely.geometry as shapely_geometry
-import shapely.ops as operations
+import shapely.ops as shapely_operations
 import math
 import copy
 
-from rhino_tools import progressBar
-from rhino_tools import checkCoordinates
+from . import rhino_tools
 
 ## TODO:
 # - generate global id for atoms
@@ -103,7 +102,7 @@ class Datacube:
             if Datacube.config["show_progress"]:
                 counter = 0
                 size = len(target) * len(target[0])
-                progressBar(counter, size, prefix = 'Extract atoms:                     ', suffix = 'Complete', length = 50)
+                rhino_tools.progressBar(counter, size, prefix = 'Extract atoms:                     ', suffix = 'Complete', length = 50)
         
             for (x_index, y_index), value in numpy.ndenumerate(target):
                 
@@ -124,7 +123,7 @@ class Datacube:
                 
                 if Datacube.config["show_progress"]: 
                     counter += 1                          
-                    progressBar(counter, size, prefix = 'Extract atoms:                     ', suffix = 'Complete', length = 50)
+                    rhino_tools.progressBar(counter, size, prefix = 'Extract atoms:                     ', suffix = 'Complete', length = 50)
 
         else:
             pass
@@ -359,7 +358,7 @@ class Datacube:
         if Datacube.config["show_progress"]:
             counter = 0
             size = len(candidates)
-            progressBar(counter, size, prefix = 'Selecting objects with condition:  ', suffix = 'Complete', length = 50)
+            rhino_tools.progressBar(counter, size, prefix = 'Selecting objects with condition:  ', suffix = 'Complete', length = 50)
 
         for obj in candidates:
 
@@ -367,7 +366,7 @@ class Datacube:
                 objects.append(obj)
             if Datacube.config["show_progress"]:
                 counter += 1
-                progressBar(counter, size, prefix = 'Selecting objects with condition:  ', suffix = 'Complete', length = 50)
+                rhino_tools.progressBar(counter, size, prefix = 'Selecting objects with condition:  ', suffix = 'Complete', length = 50)
 
         if create_level == True:
 
@@ -418,7 +417,7 @@ class Atom:
     def __init__(self, coordinates, observation, index):
 
         ## TODO: Check value integrity and trow exceptions
-        checkCoordinates(coordinates["lat"], coordinates["lon"])
+        rhino_tools.checkCoordinates(coordinates["lat"], coordinates["lon"])
 
         self.__tuple = {
             "id": id(self),
@@ -690,7 +689,7 @@ class Object:
             # TODO: Search for better algorithm to delineate border
             #
             buf = Datacube.neighbourhood.getMaxDistance()
-            geometry = operations.cascaded_union(multipoints.buffer(buf))
+            geometry = shapely_operations.cascaded_union(multipoints.buffer(buf))
             geometry = geometry.buffer(- (buf / 2))
             self.__attributes["derived"]["geometry"] = geometry
         else:
@@ -828,7 +827,7 @@ class Link:
         #
         if Datacube.config["show_progress"]:
             counter = 0
-            progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
+            rhino_tools.progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
 
         for x in range(x_size):
              for y in range(y_size):
@@ -839,7 +838,7 @@ class Link:
 
                 if Datacube.config["show_progress"]:
                     counter += 1
-                    progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
+                    rhino_tools.progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
             
         #
         # Make objects
