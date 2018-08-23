@@ -6,8 +6,8 @@ import shapely.ops as operations
 import math
 import copy
 
-from rhino_helper import progressBar
-from rhino_helper import checkCoordinates
+from rhino_tools import progressBar
+from rhino_tools import checkCoordinates
 
 ## TODO:
 # - generate global id for atoms
@@ -605,7 +605,6 @@ class Object:
         :param atoms: list of atoms
         """
         self.atoms = atoms
-#        self.__calculateAlphaShape(3)
         self.__calculateGeoAttributes()
 
     def grow(self, atoms):
@@ -615,7 +614,6 @@ class Object:
         :param atoms: list of atoms
         """
         self.atoms.extend(atoms)
-#        self.__calculateAlphaShape(3)
         self.__calculateGeoAttributes()
         self.__attributes["derived"]["geometry"] = None
 
@@ -626,14 +624,6 @@ class Object:
         :param atoms: list of atoms
         """
         self.__attributes["derived"]["geometry"] = None
-
-    def __calculateAlphaShape(self, neighbors):
-        
-        from rhino_geo import calcualateAlphaShape
-        polygon = calcualateAlphaShape(self.getAtomCoordinates(), neighbors)
-        if polygon:
-            self.__attributes["derived"]["outline"] = polygon
-        ## TODO: Handle case where not enough atoms are available for that polygon
 
     def __calculateGeoAttributes(self):
 
