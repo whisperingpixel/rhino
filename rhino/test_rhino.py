@@ -49,7 +49,10 @@ class TestRhinoHelper(unittest.TestCase):
 class TestDatacubes(unittest.TestCase):
 
     def setUp(self):
-        self.dc = Datacube()
+        atom_property = Property("class")
+        atom_property.setSimilarityFunction({"property":"class","value":1, "operator": "eq"})
+
+        self.dc = Datacube(atom_property=atom_property)
         self.dc.load('demodata/demolayer_lowres.tif', None)
 
     def test_load(self):
@@ -196,7 +199,10 @@ class TestObjects(unittest.TestCase):
 
     def setUp(self):
 
-        self.dc = Datacube()
+        atom_property = Property("class")
+        atom_property.setSimilarityFunction({"property":"class","value":1, "operator": "eq"})
+
+        self.dc = Datacube(atom_property=atom_property)
         self.dc.load('demodata/demolayer_lowres.tif', None)
         objects, coverage, level = self.dc.createObjectViewFromCoverage(0,  algorithm = "aggregation",create_level=True)
         objects, coverage, level = self.dc.selectByCondition(level["depth"],{"property": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
