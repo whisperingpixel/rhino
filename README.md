@@ -14,7 +14,7 @@ The name RHINO does not mean anything (or everything, depending on your attitude
 
 
 
-## Why do I want to have this?
+## What is the purpose of RHINO?
 
 Geographers (and people from other domains, too) traditionally like to separate their view of the world either into a *coverage*-based or *object*-based representation (sometimes this is referred to as raster and vector, although it is not quite the same). This is documented by a number of software and approaches, which support usually only one of them. However, there are several application areas, where an analyst has to switch between both worlds seamlessly. RHINO solves this gap by building a bridge between the two worlds. It does not matter whether you want to perform object-based or coverage-based analysis, in RHINO you can conduct both analyses and can even combine them into an integrated workflow. 
 
@@ -24,15 +24,15 @@ Now, for the sake of completeness, it is true that modern GIS or remote-sensing 
 
 When you access a data cube such as the Open Data Cube, RHINO internally creates an object-based view and a coverage-based view on the first level and keeps them synchronised. Each step of an analysis might go to either of the views, depending on the intention of the analyst, what is more efficient, or what is possible at all in a specific representation. During the analysis it is not necessary to stick to one representation, e.g, the first analysis step might be in the coverage-based view (such as: "aggregate all water cells"), the second step might proceed in the object-based view (such as: "select water objects having a certain size and shape"), and the third step might be conducted in the coverage-based view again (such as: "calculate the average temperature using the thermal band"). For each step, a new level will be generated, which allows you to go back and forth any time. The beauty is that you don't have to care about creating and managing the views or keeping them synchronised. This is all done by RHINO, you just need to conduct the analysis. 
 
-The most basic element in RHINO is the **atom** (Goodchild, Yuan & Cova, 2017). An atom relates a location on the Earth to a property and its value. For example at location [lat] / [lon] the property *land cover* might be *water*. This is what an atom can tell and it is the only thing it can do content-wise (it may have additional qualities such as grain, accuracy etc). It is mainly driven by an observation point-of-view, where the observations are usually point-based (e.g. with a remote satellite sensor or a in-situ ocean buoy). Both of the two representations of the world make use of the same atoms, but it depends on your preferred representation of the world what you "do" with them.
+The most basic element in RHINO is the **atom** (Goodchild, Yuan & Cova, 2017). An atom relates a location on the Earth to a property and its value. For example at location [lat] / [lon] the property *land cover* might be *water*. This is what an atom can tell and it is the only thing it can do content-wise (it may have additional qualities such as grain, accuracy etc). It is mainly driven by an observation point-of-view, where the observations are usually point-based (e.g. with a remote satellite sensor or a in-situ ocean buoy). Both of the two representations of the world make use of the same atoms, but it depends on your preferred representation of the world what you "do" with them. Based on Sinton's (1978) framework for geospatio-temporal data, which found *space*, *time*, *theme* to be inherent to any dataset, an **atom** is constructed as a tuple <position, time, theme>. Position is a reference to any spatial position in n dimensions. Time is a reference to a selected temporal coordinate system. Position and time might have *grain* as additional quality, which indicates the accuracy or the spatial footprint or accuracy and the temporal validity. Theme consist of a **property Z** and its property value at the given position z(position). The theme might have additional qualities such as procedure (indicting the source of the atom, e.g., a specific observation, a simulation, or an interpolation) or accuracy.
 
 You can put all of the the atoms into a regular or irregular grid.  You chose to view the atoms in a **coverage**-based representation. (We treat the grid as a synonym of a coverage for now, although strictly it is not correct).
 
-On the other hand, you can also put all of the surrounding atoms of the aforementioned water atom, which have the same property value, into a common "container" and draw a border around them. Now you chose to have an **object**-based representation. An object has properties such as size, shape, etc and fulfils certain criteria regarding geometry and homogeneity (Blaschke, 2010, Lang et al. 2014).
+On the other hand, you can also put all of the surrounding atoms of the aforementioned water atom, which have the same property value, into a common "container" and draw a border around them. Now you chose to have an **object**-based representation. An object consists of aggregated atoms, which are grouped according to their **property** concept and their **neighbourhood** concept An object has attributes such as size, shape, etc and fulfils certain criteria regarding geometry and homogeneity (Blaschke, 2010, Lang et al. 2014).
 
 In the physical world, objects are connected to each other in a explicit or implicit network, they maintain a relationship (association) between them (Kuhn, 2012). In RHINO the relationships or association between objects are called **link**. The reason is that linking objects might generate a new object (e.g. by generalisation of surface water bodies) as well as maintain a relationship between them (e.g. a contract between a cloud and cloud shadow).
 
-Determining which objects are linked (e.g. aggregated) is difficult and is not only depending on their category, but also (and maybe this is even more important) on their location (Kuhn, 2012). (As a matter of fact, atoms will not be aggregated into objects, because all links, including aggregation, only exists between objects. Neither in the coverage-based view nor in the object-based view atoms "live" on their own. They are either embedded into a grid or into an object. This means, initially, every atom makes up an object). Linking depends on the application/domain and is defined by a concept of **neighbourhood**. This might be simply a 4-connected neighbourhood of a grid or a more complicated concept.
+Determining which objects are linked (e.g. aggregated) is difficult and is not only depending on their attributes, but also (and maybe this is even more important) on their location (Kuhn, 2012). (As a matter of fact, atoms will not be aggregated into objects, because all links, including aggregation, only exists between objects. Neither in the coverage-based view nor in the object-based view atoms "live" on their own. They are either embedded into a grid or into an object. This means, initially, every atom makes up an object). Linking depends on the application/domain and is defined by a concept of **neighbourhood**. This might be simply a 4-connected neighbourhood of a grid or a more complicated concept.
 
 ## How to use it?
 
@@ -76,12 +76,31 @@ python ./demo.py
 ```
 
 
-
 ### Structure
 
 RHINO is completely object-oriented. The main classes are in the file *rhino.py*, the files *rhino_tools.py* contain additional procedures, which are not directly related to what RHINO does and are helpers (such as printing a nice progress bar etc).
 
-Everything of the aforementioned type Datacube, Atom, Object, Coverage, Link, Neighbourhood is a class in rhino.py
+Everything of the aforementioned type Datacube, Atom, Object, Coverage, Link, Neighbourhood, Property is a class in rhino.py.
+
+### Create a python package
+
+Optionally, you can build a python package on your own:
+
+```bash
+python ./setup.py sdist
+pip install rhino --find-links ./dist-X.X.X.zip #replace X.X.X with the version number
+```
+
+You should be able to import it in your python environment.
+
+```python
+from rhino import rhino
+
+connection = /path/to/source
+
+datacube = rhino.Datacube()
+datacube.load(connection)
+```
 
 ## Is it possible to share, have or steal it?
 
@@ -96,6 +115,8 @@ Goodchild, M. F., Yuan, M., & Cova, T. J. (2007). Towards a general theory of ge
 Kuhn, W., 2012. Core concepts of spatial information for transdisciplinary research. *International Journal of Geographical Information Science*, *26*(12), pp.2267-2276. https://www.tandfonline.com/doi/full/10.1080/13658816.2012.722637
 
 Lang, S., Kienberger, S., Tiede, D., Hagenlocher, M. and Pernkopf, L., 2014. Geons–domain-specific regionalization of space. *Cartography and Geographic Information Science*, *41*(3), pp.214-226. https://www.tandfonline.com/doi/abs/10.1080/15230406.2014.902755
+
+Sinton, David. 1978. “The inherent structure of information as a constraint to analysis: Mapped thematic data as a case study.” Harvard papers on geographic information systems 6: 1–17. 
 
 # Contact
 

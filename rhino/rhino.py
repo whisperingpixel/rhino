@@ -38,8 +38,9 @@ class Datacube:
     }
 
     neighbourhood = None
+    atom_property = None
 
-    def __init__(self, show_progress = False):
+    def __init__(self, show_progress = False, atom_property = None):
 
         self.__view = {
             "coverage": [],
@@ -52,6 +53,9 @@ class Datacube:
         # TODO: Make proper config
         #
         Datacube.config["show_progress"] = show_progress
+
+        if atom_property is not None:
+            Datacube.atom_property = atom_property
 
     def load(self, connection, boundingbox):
         """
@@ -81,6 +85,7 @@ class Datacube:
         # Set default neighbourhood concept
         #
         Datacube.neighbourhood = Neighbourhood("4-connected")
+
 
     def extractAtoms(self, target):
 
@@ -113,13 +118,12 @@ class Datacube:
                 lon = y_index * x_size + upper_left_x + (x_size / 2) #add half the cell size
                 lat = x_index * y_size + upper_left_y + (y_size / 2) #to centre the point
                 # TODO: add time
-                property = "class"
                 value = int(value) ## TODO: remove int, this is due to the demo data
 
                 #
                 # Create an object and fill it with the atom
                 #
-                atoms.append(Atom({"lat": lat, "lon": lon},{"property": property, "value": value},{"x":x_index,"y":y_index}))
+                atoms.append(Atom({"lat": lat, "lon": lon},{"property": Datacube.atom_property, "value": value},{"x":x_index,"y":y_index}))
                 
                 if Datacube.config["show_progress"]: 
                     counter += 1                          
@@ -192,7 +196,8 @@ class Datacube:
         
         if algorithm == "aggregation":
             
-            condition = parameters
+            condition = Datacube.atom_property.getSimilarityFunction()
+
             #
             # STEP 1: Select all objects, which match the condition. If no objects
             # match the condition, return here.
@@ -333,7 +338,7 @@ class Datacube:
         :param create_level: boolean, whether a new level should be created or not
         :return: list of objects
         """
-
+        
         def eq(value, candidate):
             return value == candidate
 
@@ -361,13 +366,13 @@ class Datacube:
             rhino_tools.progressBar(counter, size, prefix = 'Selecting objects with condition:  ', suffix = 'Complete', length = 50)
 
         for obj in candidates:
-
-            if locals()[condition["operator"]](obj.getAttributeValue(condition["key"]), condition["value"]):
+            if locals()[condition["operator"]](obj.getAttributeValue(condition["property"]), condition["value"]):
                 objects.append(obj)
+
             if Datacube.config["show_progress"]:
                 counter += 1
                 rhino_tools.progressBar(counter, size, prefix = 'Selecting objects with condition:  ', suffix = 'Complete', length = 50)
-
+        
         if create_level == True:
 
             level = self.createNewLevel()
@@ -397,7 +402,7 @@ class Datacube:
             raise Exception("Choose one of " + ",".join(existing_procedures))
         
         if procedure == "aggregation":
-            return self.createObjectViewFromCoverage(level, algorithm = "aggregation", parameters = {"key":"class","value":1, "operator": "eq"}, create_level = True)
+            return self.createObjectViewFromCoverage(level, algorithm = "aggregation", parameters = None, create_level = True)
         
         if procedure == "selection":
             return self.selectByCondition(level, parameters, create_level = True)
@@ -743,8 +748,7 @@ class Object:
                     atomProperties.append(a.getObservationValue()) ## TODO: return based on the attribute arg
                 return atomProperties[0] ## TODO: this returns the first one, make it user-defined, such as avg, min, max, median, ...
 
-            else:
-                return None
+        return None
         
 
     def setAttributeValue(self, attribute, value):
@@ -856,6 +860,32 @@ class Link:
         :return: int
         """                
         return self.id
+
+
+class Property:
+
+    def __init__(self, property_type):
+        self.property_type = property_type
+        self.aggregation_function = "any"
+
+
+    def setSimilarityFunction(self, similarity):
+        self.similarity = similarity
+    
+
+    def getSimilarityFunction(self):
+        return self.similarity
+
+
+    def setAggregationFunction(self, function):
+        if function not in ["any","all"]:
+            raise Exception("Aggregation function must be one of any, all")
+        self.aggregation_function = function
+
+
+    def getPropertyType(self):
+        return self.property_type
+
 
 class Neighbourhood:
 

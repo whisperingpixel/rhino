@@ -75,8 +75,8 @@ class TestDatacubes(unittest.TestCase):
         self.assertDictEqual(self.dc.getLevel(1), new_level)
 
     def test_aggregateandselectobjects(self):
-        objects, coverage, level = self.dc.createObjectViewFromCoverage(0, algorithm = "aggregation", parameters = {"key":"class","value":1, "operator": "eq"}, create_level=True, )
-        objects, coverage, level = self.dc.selectByCondition(level["depth"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
+        objects, coverage, level = self.dc.createObjectViewFromCoverage(0, algorithm = "aggregation", create_level=True, )
+        objects, coverage, level = self.dc.selectByCondition(level["depth"],{"property": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
         self.assertEqual(len(objects),1)
         self.assertEqual(level["depth"],2)
 
@@ -113,7 +113,7 @@ class TestDatacubes(unittest.TestCase):
         #
         # STEP 2: Aggregate. The coverage should cover only pixels with class value==1.
         #
-        objects, coverage, level = self.dc.createObjectViewFromCoverage(0, algorithm = "aggregation", parameters = {"key":"class","value":1, "operator": "eq"}, create_level=True)
+        objects, coverage, level = self.dc.createObjectViewFromCoverage(0, algorithm = "aggregation", create_level=True)
 
         testdataset = gdal.Open("demodata/demolayer_lowres_result_level_1.tif")
         band = testdataset.GetRasterBand(1)
@@ -128,7 +128,7 @@ class TestDatacubes(unittest.TestCase):
         #
         # STEP 3: Select: The coverage should contain only pixels with class value == 1 and the object's compactness value >= 0.5.
         #
-        objects, coverage, level = self.dc.selectByCondition(level["depth"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
+        objects, coverage, level = self.dc.selectByCondition(level["depth"],{"property": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
 
         testdataset = gdal.Open("demodata/demolayer_lowres_result_level_2.tif")
         band = testdataset.GetRasterBand(1)
@@ -198,8 +198,8 @@ class TestObjects(unittest.TestCase):
 
         self.dc = Datacube()
         self.dc.load('demodata/demolayer_lowres.tif', None)
-        objects, coverage, level = self.dc.createObjectViewFromCoverage(0,  algorithm = "aggregation", parameters = {"key":"class","value":1, "operator": "eq"},create_level=True)
-        objects, coverage, level = self.dc.selectByCondition(level["depth"],{"key": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
+        objects, coverage, level = self.dc.createObjectViewFromCoverage(0,  algorithm = "aggregation",create_level=True)
+        objects, coverage, level = self.dc.selectByCondition(level["depth"],{"property": "compactness", "value": 0.5, "operator": "gt"}, create_level=True)
         self.object2 = objects[0]
 
         self.atoms = []
