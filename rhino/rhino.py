@@ -5,6 +5,8 @@ import shapely.geometry as shapely_geometry
 import shapely.ops as shapely_operations
 import math
 import copy
+import datacube
+import xarray
 
 from . import rhino_tools
 
@@ -26,7 +28,7 @@ class Datacube:
             "geometry": None
         },
         "modelled": {
-            "class": None
+            "ndvi": None
         }
     }
 
@@ -35,6 +37,13 @@ class Datacube:
             "link_type": None
         },
         "modelled": []
+    }
+    
+    dataset_metadata = {
+        "coverage_x_size": None,
+        "coverage_y_size": None,
+        "coverage_x_grain": None,
+        "coverage_y_grain": None
     }
 
     neighbourhood = None
@@ -63,10 +72,19 @@ class Datacube:
 
         :param boundingbox: [x_min, x_max, y_min, y_max]
         """
-        ## TODO: Load datacube from here. Be advised that this is a workaraound without a datacube
 
-        Datacube.dataset = gdal.Open(connection)
-        
+        dc = datacube.Datacube()
+        area_of_interest = dc.load(product=connection, **boundingbox)
+
+
+        self.setDatasetMetadata(
+            coverage_x_size = area_of_interest.sizes["x"],
+            coverage_y_size = area_of_interest.sizes["y"],
+            coverage_x_grain = 10, #TODO: get from metadata
+            coverage_y_grain = 10  #TODO: get from metadata
+        )
+
+
         ## TODO: account for different bands
 
         level = self.createNewLevel("initial_level")
@@ -75,10 +93,12 @@ class Datacube:
         # do this somewhere else. Basically it avoids that the atoms have to be created multiple times. The numpy array 
         # should not be further exposed to the user as the theory says it is actually a field of atoms.
         #
-        band = Datacube.dataset.GetRasterBand(1)
-        array = numpy.array(band.ReadAsArray())
+        array = ((area_of_interest.nir - area_of_interest.red) / (area_of_interest.nir + area_of_interest.red))
+
         atoms = self.extractAtoms(array)
-        self.setCoverageView(level["depth"], array, atoms, Datacube.dataset.GetGeoTransform())
+
+        self.setCoverageView(level["depth"], array, atoms)
+       
         self.createObjectViewFromCoverage(level["depth"], create_level=False, algorithm="pixelwise")
 
         #
@@ -91,43 +111,28 @@ class Datacube:
 
         atoms = []
 
-        if type(target) == numpy.ndarray:
+        metadata = self.getDatasetMetadata()
 
-            # 
-            # TODO: Question: Where does the geotrasnform come from
-            #
-            (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size) = Datacube.dataset.GetGeoTransform()
-
-            #
-            # Iterate through all pixels and create an atom from it. Then, create an object for each atom.
-            # Initial objects only consist of one single atom
-            #
-            # Stolen from here: https://stackoverflow.com/questions/6967463/iterating-over-a-numpy-array/6967491#6967491
+        if type(target) == xarray.DataArray:
 
             if Datacube.config["show_progress"]:
                 counter = 0
-                size = len(target) * len(target[0])
+                size = metadata["coverage_x_size"] * metadata["coverage_y_size"]
                 rhino_tools.progressBar(counter, size, prefix = 'Extract atoms:                     ', suffix = 'Complete', length = 50)
         
-            for (x_index, y_index), value in numpy.ndenumerate(target):
-                
-                #
-                # Extract coordinates, properties and values from atoms
-                # Stolen from here: https://gis.stackexchange.com/questions/42790/gdal-and-python-how-to-get-coordinates-for-all-cells-having-a-specific-value/42846#42846
 
-                lon = y_index * x_size + upper_left_x + (x_size / 2) #add half the cell size
-                lat = x_index * y_size + upper_left_y + (y_size / 2) #to centre the point
-                # TODO: add time
-                value = int(value) ## TODO: remove int, this is due to the demo data
+            for x_index in range(0, metadata["coverage_x_size"]):
+                for y_index in range(0, metadata["coverage_y_size"]):
 
-                #
-                # Create an object and fill it with the atom
-                #
-                atoms.append(Atom({"lat": lat, "lon": lon},{"property": Datacube.atom_property, "value": value},{"x":x_index,"y":y_index}))
-                
-                if Datacube.config["show_progress"]: 
-                    counter += 1                          
-                    rhino_tools.progressBar(counter, size, prefix = 'Extract atoms:                     ', suffix = 'Complete', length = 50)
+                    value = target.item((0, y_index, x_index))
+                    coords_x = target.coords["x"].item(x_index)
+                    coords_y = target.coords["y"].item(y_index)
+
+                    atoms.append(Atom({"lat": coords_x, "lon": coords_y},{"property": Datacube.atom_property, "value": value},{"x":x_index,"y":y_index}))
+
+                    if Datacube.config["show_progress"]: 
+                        counter += 1                          
+                        rhino_tools.progressBar(counter, size, prefix = 'Extract atoms:                     ', suffix = 'Complete', length = 50)
 
         else:
             pass
@@ -169,6 +174,7 @@ class Datacube:
 
 
     def createObjectViewFromCoverage(self, from_level, create_level = True, algorithm = "pixelwise", parameters = None):
+
         """
         Creates the coverage view in the rhino datacube.
 
@@ -205,7 +211,9 @@ class Datacube:
             # This function generates a new level and views
             #
             objects, coverage, level = self.selectByCondition(from_level, condition, create_level=create_level)
+
             if len(objects) == 0:
+                print("No objects found") #TODO: Raise exception here
                 return
 
             #
@@ -253,11 +261,12 @@ class Datacube:
         :param algorithm: None (currently unused)
         :param parameters: None (currently unused)
         """
+        metadata = self.getDatasetMetadata()
         old_stupid_array = self.__view["coverage"][0].getStupidArray()
-        x_size = len(old_stupid_array)
-        y_size = len(old_stupid_array[0])
+        x_size = metadata["coverage_x_size"]
+        y_size = metadata["coverage_y_size"]
 
-        new_stupid_array = numpy.array(old_stupid_array, copy=True)
+        new_stupid_array = old_stupid_array.copy(deep=True)
         new_stupid_array = new_stupid_array * 0
         
         atoms = []
@@ -265,33 +274,27 @@ class Datacube:
             for a in o.getAtoms():
                 x,y = a.getIndex()
                 value = a.getObservationValue()
-                new_stupid_array[x][y] = value
+                new_stupid_array[0][y][x] = value
                 atoms.append(a)
 
-        coverage = Coverage(x_size, y_size, self.__view["coverage"][0].getGeoTransform())
+        coverage = Coverage(x_size, y_size)
         coverage.create(atoms=atoms, array=new_stupid_array)
 
         self.__view["coverage"][from_level] = coverage
 
 
-    def setCoverageView(self, level, array, atoms, geotransform = None):
+    def setCoverageView(self, level, array, atoms):
         """
         Sets the coverage of a specific level. Will override existing coverage.
 
         :param level: int, target level
         :param array: array (i.e. stupid array)
         :param atoms: atoms
-        :param geotransform: geotransfrom
         :return: dict
         """        
-        if geotransform == None:
-            if len(self.__view["coverage"]) == 0:
-                raise Exception("No geotransform found")
-            geotransform = self.__view["coverage"][0].getGeoTransform()
 
-        x_size = len(array)
-        y_size = len(array[0])
-        coverage = Coverage(x_size,y_size, geotransform)
+        metadata = self.getDatasetMetadata()
+        coverage = Coverage(metadata["coverage_x_size"], metadata["coverage_y_size"])
         coverage.create(array=array, atoms=atoms)
         self.__view["coverage"][level] = coverage
 
@@ -312,15 +315,20 @@ class Datacube:
 
         :return: dict
         """
-        gt = Datacube.dataset.GetGeoTransform()
-        metadata = {
-            "coverage_x_size": Datacube.dataset.RasterXSize,
-            "coverage_y_size": Datacube.dataset.RasterYSize,
-            "coverage_x_grain": gt[1],
-            "coverage_y_grain": gt[5]
+        return Datacube.dataset_metadata
+
+
+    def setDatasetMetadata(self, coverage_x_size, coverage_y_size, coverage_x_grain, coverage_y_grain):
+        
+        Datacube.dataset_metadata = {
+            "coverage_x_size": coverage_x_size,
+            "coverage_y_size": coverage_y_size,
+            "coverage_x_grain": coverage_x_grain,
+            "coverage_y_grain": coverage_y_grain
         }
 
-        return metadata
+    
+
 
     ## TODO: This is currently not possible as switching to another neighbourhood
     #        would invalidate existing object links.
@@ -366,6 +374,7 @@ class Datacube:
             rhino_tools.progressBar(counter, size, prefix = 'Selecting objects with condition:  ', suffix = 'Complete', length = 50)
 
         for obj in candidates:
+
             if locals()[condition["operator"]](obj.getAttributeValue(condition["property"]), condition["value"]):
                 objects.append(obj)
 
@@ -422,7 +431,7 @@ class Atom:
     def __init__(self, coordinates, observation, index):
 
         ## TODO: Check value integrity and trow exceptions
-        rhino_tools.checkCoordinates(coordinates["lat"], coordinates["lon"])
+   #     rhino_tools.checkCoordinates(coordinates["lat"], coordinates["lon"])
 
         self.__tuple = {
             "id": id(self),
@@ -521,11 +530,10 @@ class Atom:
 
 class Coverage:
 
-    def __init__(self, x_size, y_size, geotransform):
+    def __init__(self, x_size, y_size):
         self.id = id(self)
-        self.coverage = [[]]
-        self.__numpyarray = None
-        self.geotransform = geotransform
+        self.coverage = []
+        self.__array = None
 
         self.x_size = x_size
         self.y_size = y_size
@@ -534,7 +542,8 @@ class Coverage:
             self.coverage.append([])
             for y in range(y_size):
                 self.coverage[x].append(None)
-    
+
+
     def create(self, atoms = None, array = None):
         """
         Creates the coverage (create as in "creation" by god), don't confuse with
@@ -553,7 +562,8 @@ class Coverage:
                 self.coverage[x][y] = atom
 
         if array is not None:
-            self.__numpyarray = array
+            self.__array = array
+
 
     def getCoverage(self, boundingbox=None):
         """
@@ -567,6 +577,7 @@ class Coverage:
         else:
             return self.coverage
     
+
     def getStupidArray(self):
         """
         Returns the stupid (numpy) array. This should only be used for
@@ -574,7 +585,8 @@ class Coverage:
 
         :return: numpy array
         """         
-        return self.__numpyarray
+        return self.__array
+
 
     def getSize(self):
         """
@@ -584,14 +596,6 @@ class Coverage:
         """                 
         return (self.x_size, self.y_size)
 
-
-    def getGeoTransform(self):
-        """
-        Returns the metadata (geotransform) of the coverage.
-
-        :return: tuple (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size)
-        """                 
-        return self.geotransform
 
 class Object:
 
@@ -776,7 +780,6 @@ class Object:
             print(l)
         print("}")
 
-
 class Link:
 
     def __init__(self, link_type, target, level, mutual = True):
@@ -807,7 +810,7 @@ class Link:
         :param coverage: Coverage
         """
 
-        stupid_array = coverage.getStupidArray()
+        array = coverage.getStupidArray()
         atom_coverage = coverage.getCoverage(None)
 
         x_size, y_size = coverage.getSize()
@@ -817,35 +820,53 @@ class Link:
         #
         from skimage.measure import label as region_group
 
-        grouped = region_group(stupid_array)
-
+        grouped = region_group((array/array).fillna(0), background=0)
         #
         # Create a nested list where the atoms will be stored
         #
         atom_lists = []
-        for i in range(numpy.max(grouped)):
+        for i in range(grouped.max()):
             atom_lists.append([])
 
         #
         # Aggregate the atoms to the atom_list
         #
-        if Datacube.config["show_progress"]:
-            counter = 0
-            rhino_tools.progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
+   #     if Datacube.config["show_progress"]:
+   #         counter = 0
+    #        rhino_tools.progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
 
         for x in range(x_size):
              for y in range(y_size):
-                atom = atom_coverage[x][y]
-                object_number = grouped[x][y]
-                if object_number != 0:
-                    atom_lists[object_number-1].append(atom)
+                print(x)
+                #
+                # Get the object number of this location
+                #
+#                object_number = grouped[0][x][y]
 
-                if Datacube.config["show_progress"]:
-                    counter += 1
-                    rhino_tools.progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
-            
+                #
+                # We treat objects with number 0 as background
+                #
+#                if object_number != 0:
+
+                    #
+                    # Get the atom of this location
+                    #
+ #                   atom = atom_coverage[x][y]
+ #                   if atom is None:
+ #                       print("Fail: No atom found, but there should be one") #TODO: Make exception
+ #                   else:
+ #                       print(atom)
+ #                       #print(atom._print())
+#
+ #                       atom_lists[object_number-1].append(atom)
+
+  #              if Datacube.config["show_progress"]:
+  #                  counter += 1
+  #                  rhino_tools.progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
+        import sys
+        sys.exit()
         #
-        # Make objects
+        # Iterate through the atom list and create objects
         #
         for atoms in atom_lists:
             o = Object()
