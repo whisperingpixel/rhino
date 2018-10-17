@@ -24,6 +24,7 @@ class Datacube:
     object_model = {
         "derived":{
             "compactness": None,
+            "area": None,
             "boundingbox": None,
             "geometry": None
         },
@@ -66,7 +67,7 @@ class Datacube:
         if atom_property is not None:
             Datacube.atom_property = atom_property
 
-    def load(self, connection, boundingbox):
+    def load(self, product, boundingbox):
         """
         Loads the rhino datacube.
 
@@ -74,7 +75,7 @@ class Datacube:
         """
 
         dc = datacube.Datacube()
-        area_of_interest = dc.load(product=connection, **boundingbox)
+        area_of_interest = dc.load(product=product, **boundingbox)
 
 
         self.setDatasetMetadata(
@@ -744,6 +745,10 @@ class Object:
                 geom = self.getGeometry()
                 return (4 * math.pi * geom.area) / (geom.length * geom.length)
 
+            if attribute == "area":
+                geom = self.getGeometry()
+                return geom.area
+
         else:
             if attribute in self.__attributes["modelled"]:
 
@@ -831,40 +836,39 @@ class Link:
         #
         # Aggregate the atoms to the atom_list
         #
-   #     if Datacube.config["show_progress"]:
-   #         counter = 0
-    #        rhino_tools.progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
+        if Datacube.config["show_progress"]:
+            counter = 0
+            rhino_tools.progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
 
         for x in range(x_size):
              for y in range(y_size):
-                print(x)
+
                 #
                 # Get the object number of this location
                 #
-#                object_number = grouped[0][x][y]
+                object_number = grouped[0][y][x]
 
                 #
                 # We treat objects with number 0 as background
                 #
-#                if object_number != 0:
+                if object_number != 0:
 
                     #
                     # Get the atom of this location
                     #
- #                   atom = atom_coverage[x][y]
- #                   if atom is None:
- #                       print("Fail: No atom found, but there should be one") #TODO: Make exception
- #                   else:
+                    atom = atom_coverage[x][y]
+                    if atom is None:
+                        print("Fail: No atom found, but there should be one") #TODO: Make exception
+                    else:
  #                       print(atom)
  #                       #print(atom._print())
 #
- #                       atom_lists[object_number-1].append(atom)
+                        atom_lists[object_number-1].append(atom)
 
-  #              if Datacube.config["show_progress"]:
-  #                  counter += 1
-  #                  rhino_tools.progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
-        import sys
-        sys.exit()
+                if Datacube.config["show_progress"]:
+                    counter += 1
+                    rhino_tools.progressBar(counter, x_size*y_size, prefix = 'Object linking (aggregate):        ', suffix = 'Complete', length = 50)
+
         #
         # Iterate through the atom list and create objects
         #
@@ -872,6 +876,7 @@ class Link:
             o = Object()
             o.create(atoms)
             self.__new_objects.append(o)
+
 
 
     def getID(self):
