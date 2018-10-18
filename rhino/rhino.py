@@ -126,8 +126,8 @@ class Datacube:
                 for y_index in range(0, metadata["coverage_y_size"]):
 
                     value = target.item((0, y_index, x_index))
-                    coords_x = target.coords["x"].item(x_index)
-                    coords_y = target.coords["y"].item(y_index)
+                    coords_y = target.coords["x"].item(x_index)
+                    coords_x = target.coords["y"].item(y_index)
 
                     atoms.append(Atom({"lat": coords_x, "lon": coords_y},{"property": Datacube.atom_property, "value": value},{"x":x_index,"y":y_index}))
 
