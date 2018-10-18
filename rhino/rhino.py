@@ -7,6 +7,7 @@ import math
 import copy
 import datacube
 import xarray
+import re
 
 from . import rhino_tools
 
@@ -67,15 +68,15 @@ class Datacube:
         if atom_property is not None:
             Datacube.atom_property = atom_property
 
-    def load(self, product, boundingbox):
+    def load(self, product, domain):
         """
         Loads the rhino datacube.
 
-        :param boundingbox: [x_min, x_max, y_min, y_max]
+        :param domain: [x_min, x_max, y_min, y_max]
         """
 
         dc = datacube.Datacube()
-        area_of_interest = dc.load(product=product, **boundingbox)
+        area_of_interest = dc.load(product=product, **domain)
 
 
         self.setDatasetMetadata(
@@ -738,6 +739,7 @@ class Object:
 
 
     def getAttributeValue(self, attribute):
+
         if attribute in self.__attributes["derived"]:
 
             if attribute == "compactness":
@@ -750,12 +752,35 @@ class Object:
                 return geom.area
 
         else:
-            if attribute in self.__attributes["modelled"]:
+                
+            matches = re.match( r'^((avg)|(min)|(max)|(std))\(([a-z]+)\)$', attribute, re.I)
+            aggregate_function = matches.group(1)
+            property_type = matches.group(6)
 
-                atomProperties = []
+            if aggregate_function is not None and property_type in self.__attributes["modelled"]:
+
+                atomProperties = numpy.array([])
+                aggregate_value = None
+
                 for a in self.atoms:
-                    atomProperties.append(a.getObservationValue()) ## TODO: return based on the attribute arg
-                return atomProperties[0] ## TODO: this returns the first one, make it user-defined, such as avg, min, max, median, ...
+                    atomProperties = numpy.append(atomProperties, a.getObservationValue()) ## TODO: return based on the property arg
+                
+                if len(atomProperties) == 1:
+                    return atomProperties[0]
+
+                if aggregate_function == "avg":
+                    aggregate_value = numpy.average(atomProperties)
+                if aggregate_function == "min":
+                    aggregate_value = numpy.min(atomProperties)
+                if aggregate_function == "max":
+                    aggregate_value = numpy.max(atomProperties)
+                if aggregate_function == "std":
+                    aggregate_value = numpy.std(atomProperties)
+
+                return aggregate_value
+
+            else:
+                pass
 
         return None
         
