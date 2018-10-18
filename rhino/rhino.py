@@ -3,6 +3,7 @@ import numpy
 import shapely
 import shapely.geometry as shapely_geometry
 import shapely.ops as shapely_operations
+from shapely.wkt import loads as load_wkt
 import math
 import copy
 import datacube
@@ -75,8 +76,16 @@ class Datacube:
         :param domain: [x_min, x_max, y_min, y_max]
         """
 
+        domain_shape = load_wkt(domain["geometry"])
+        domain_bounds = domain_shape.bounds
+        domain_crs = domain["crs"]
+
         dc = datacube.Datacube()
-        area_of_interest = dc.load(product=product, **domain)
+        area_of_interest = dc.load(
+            product = product,
+            x = (domain_bounds[0], domain_bounds[2]),
+            y = (domain_bounds[1],domain_bounds[3]),
+            crs = domain_crs)
 
 
         self.setDatasetMetadata(
