@@ -106,7 +106,7 @@ class Datacube:
         #
         array = ((area_of_interest.nir - area_of_interest.red) / (area_of_interest.nir + area_of_interest.red))
 
-        atoms = self.extractAtoms(array)
+        atoms = self.extractAtoms(array, domain_shape)
 
         self.setCoverageView(level["depth"], array, atoms)
        
@@ -118,7 +118,7 @@ class Datacube:
         Datacube.neighbourhood = Neighbourhood("4-connected")
 
 
-    def extractAtoms(self, target):
+    def extractAtoms(self, target, domain_shape):
 
         atoms = []
 
@@ -135,11 +135,23 @@ class Datacube:
             for x_index in range(0, metadata["coverage_x_size"]):
                 for y_index in range(0, metadata["coverage_y_size"]):
 
-                    value = target.item((0, y_index, x_index))
+                    
                     coords_y = target.coords["x"].item(x_index)
                     coords_x = target.coords["y"].item(y_index)
 
-                    atoms.append(Atom({"lat": coords_x, "lon": coords_y},{"property": Datacube.atom_property, "value": value},{"x":x_index,"y":y_index}))
+                    if shapely_geometry.Point(coords_y, coords_x).within(domain_shape): #TODO: This will be repeated later, might be redundant, but I don't want to break the code
+
+                        value = target.item((0, y_index, x_index))
+
+                        atoms.append(
+                            Atom(
+                                    {"lat": coords_x, "lon": coords_y},
+                                    {"property": Datacube.atom_property, "value": value},
+                                    {"x":x_index,"y":y_index}
+                                )
+                            )
+                    else:
+                        target[0][y_index][x_index] = numpy.nan
 
                     if Datacube.config["show_progress"]: 
                         counter += 1                          
@@ -203,10 +215,24 @@ class Datacube:
 
             atom_coverage = coverage.getCoverage()
             object_list = []
-            for r in atom_coverage:
-                for a in r:
+
+            #
+            # Iterate through the atom coverage and create an object for each atom
+            #
+            for row in atom_coverage:
+                for cell in row:
+
+                    #
+                    # If the cell is empty, continue and do not create an object
+                    #
+                    if cell is None:
+                        continue
+
+                    #
+                    # Create an object and assign the atom in the cell to it
+                    #
                     o = Object()
-                    o.create([a])
+                    o.create([cell])
                     object_list.append(o)
             
             self.setObjectView(from_level, object_list)
@@ -278,7 +304,7 @@ class Datacube:
         y_size = metadata["coverage_y_size"]
 
         new_stupid_array = old_stupid_array.copy(deep=True)
-        new_stupid_array = new_stupid_array * 0
+        new_stupid_array = new_stupid_array * 0 #TODO initialise with nan
         
         atoms = []
         for o in self.__view["objects"][from_level]:
@@ -949,8 +975,8 @@ class Property:
 
 class Neighbourhood:
 
-    def __init__(self, concept):
-
+    def __init__(self, concept = "4-connected"):
+        
         if concept in ["raster_4", "4-connected", "raster_8", "moore", "8-connected"]:
             self.concept = concept
         else:
