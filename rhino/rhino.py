@@ -117,8 +117,10 @@ class Datacube:
         self.setDatasetMetadata(
             coverage_x_size = area_of_interest.sizes["x"],
             coverage_y_size = area_of_interest.sizes["y"],
+            coverage_t_size = area_of_interest.sizes["time"],
             coverage_x_grain = 10, #TODO: get from metadata
-            coverage_y_grain = 10  #TODO: get from metadata
+            coverage_y_grain = 10,  #TODO: get from metadata
+            coverage_t_grain = 1
         )
 
 
