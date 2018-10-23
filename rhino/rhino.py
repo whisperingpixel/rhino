@@ -52,6 +52,7 @@ class Datacube:
     neighbourhood = None
     atom_property = None
 
+
     def __init__(self, show_progress = False, atom_property = None):
 
         self.__view = {
@@ -65,9 +66,21 @@ class Datacube:
         # TODO: Make proper config
         #
         Datacube.config["show_progress"] = show_progress
+        Datacube.config["sfc_index"] = False
 
         if atom_property is not None:
             Datacube.atom_property = atom_property
+
+        #
+        # Indexing using Hilbert Curve
+        #
+        self.i_xmin = None
+        self.i_xmax = None
+        self.i_ymin = None
+        self.i_ymax = None
+        self.i_number_of_cells = 100
+        self.sfc = None
+        self.sfc_index = []
 
     def load(self, product, domain):
         """
@@ -87,6 +100,16 @@ class Datacube:
             y = (domain_bounds[1],domain_bounds[3]),
             crs = domain_crs)
 
+        if Datacube.config["sfc_index"]:
+            self.i_xmin = float(min(area_of_interest.coords["y"]))
+            self.i_xmax = float(max(area_of_interest.coords["y"]))
+            self.i_ymin = float(min(area_of_interest.coords["x"]))
+            self.i_ymax = float(max(area_of_interest.coords["x"]))
+
+
+            self.sfc = rhino_tools.HilbertCurve(self.i_number_of_cells, 2)
+            for i in range(self.getIndexPosition((self.i_xmax, self.i_ymax))):
+                self.sfc_index.append([])
 
         self.setDatasetMetadata(
             coverage_x_size = area_of_interest.sizes["x"],
@@ -117,7 +140,38 @@ class Datacube:
         #
         Datacube.neighbourhood = Neighbourhood("4-connected")
 
+    #
+    # Calculate the Index position for the atom
+    # TODO: Add time dimension
+    #
+    def getIndexPosition(self, coordinate):
+        """
+        Calculates the index position for the atom tuple.
 
+        :param coordinate: tuple; coordinates
+        :return: int
+        """                
+        x_coord = coordinate[0]
+        y_coord = coordinate[1]
+        
+        if x_coord > self.i_xmax or x_coord < self.i_xmin:
+            print ("invalid x coordinate: " + str(x_coord) + " because it is smaller than " + str(self.i_xmin) + " or larger than " + str(self.i_xmax))
+            return None
+        
+        if y_coord > self.i_ymax or y_coord < self.i_ymin:
+            print ("invalid y coordinate: " + str(y_coord))
+            return None
+
+        i_xgrain = (self.i_xmax - self.i_xmin) / self.i_number_of_cells
+        i_ygrain = (self.i_ymax - self.i_ymin) / self.i_number_of_cells
+        x_hilbert = math.floor((x_coord - self.i_xmin) / i_xgrain)
+        y_hilbert = math.floor((y_coord - self.i_ymin) / i_ygrain)
+        return self.sfc.distance_from_coordinates([x_hilbert, y_hilbert])
+
+    def getIndex(self):
+        return self.sfc_index
+
+        
     def extractAtoms(self, target, domain_shape):
 
         atoms = []
@@ -139,17 +193,36 @@ class Datacube:
                     coords_y = target.coords["x"].item(x_index)
                     coords_x = target.coords["y"].item(y_index)
 
+                    if Datacube.config["sfc_index"]:
+                        h = self.getIndexPosition((coords_x, coords_y))
+                    else:
+                        h = -1
+
                     if shapely_geometry.Point(coords_y, coords_x).within(domain_shape): #TODO: This will be repeated later, might be redundant, but I don't want to break the code
 
                         value = target.item((0, y_index, x_index))
 
-                        atoms.append(
-                            Atom(
+                        #
+                        # Create atom
+                        #
+                        a = Atom(
                                     {"lat": coords_x, "lon": coords_y},
                                     {"property": Datacube.atom_property, "value": value},
-                                    {"x":x_index,"y":y_index}
+                                    {"x":x_index,"y":y_index},
+                                    {"h":h}
                                 )
-                            )
+
+                        #
+                        # Append atom to list
+                        #
+                        atoms.append(a)
+
+                        #
+                        # Add to index
+                        #
+                        if Datacube.config["sfc_index"]:
+                            self.sfc_index[h].append(a)
+
                     else:
                         target[0][y_index][x_index] = numpy.nan
 
@@ -465,7 +538,7 @@ class Datacube:
 
 class Atom:
 
-    def __init__(self, coordinates, observation, index):
+    def __init__(self, coordinates, observation, index, h):
 
         ## TODO: Check value integrity and trow exceptions
    #     rhino_tools.checkCoordinates(coordinates["lat"], coordinates["lon"])
@@ -478,7 +551,8 @@ class Atom:
             "property": observation["property"],
             "value": observation["value"],
             "x_index": index["x"],
-            "y_index": index["y"]
+            "y_index": index["y"],
+            "h": h
         }
 
 
