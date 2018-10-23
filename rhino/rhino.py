@@ -47,7 +47,7 @@ class Datacube:
         "coverage_y_size": None,
         "coverage_t_size": None,
         "coverage_x_grain": None,
-        "coverage_y_grain": None
+        "coverage_y_grain": None,
         "coverage_t_grain": None
     }
 
