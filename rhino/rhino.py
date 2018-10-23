@@ -78,6 +78,8 @@ class Datacube:
         self.i_xmax = None
         self.i_ymin = None
         self.i_ymax = None
+        self.i_tmax = None
+        self.i_tmin = None
         self.i_number_of_cells = 100
         self.sfc = None
         self.sfc_index = []
@@ -105,10 +107,11 @@ class Datacube:
             self.i_xmax = float(max(area_of_interest.coords["y"]))
             self.i_ymin = float(min(area_of_interest.coords["x"]))
             self.i_ymax = float(max(area_of_interest.coords["x"]))
+            self.t_min = 0.0
+            self.t_max = 1.0
 
-
-            self.sfc = rhino_tools.HilbertCurve(self.i_number_of_cells, 2)
-            for i in range(self.getIndexPosition((self.i_xmax, self.i_ymax))):
+            self.sfc = rhino_tools.HilbertCurve(self.i_number_of_cells, 3)
+            for i in range(self.getIndexPosition((self.i_xmax, self.i_ymax, self.i_tmax))):
                 self.sfc_index.append([])
 
         self.setDatasetMetadata(
@@ -153,7 +156,8 @@ class Datacube:
         """                
         x_coord = coordinate[0]
         y_coord = coordinate[1]
-        
+        t_coord = coordinate[2]
+
         if x_coord > self.i_xmax or x_coord < self.i_xmin:
             print ("invalid x coordinate: " + str(x_coord) + " because it is smaller than " + str(self.i_xmin) + " or larger than " + str(self.i_xmax))
             return None
@@ -162,11 +166,20 @@ class Datacube:
             print ("invalid y coordinate: " + str(y_coord))
             return None
 
+        if t_coord > self.i_tmax or t_coord < self.i_tmin:
+            print("invalid t coordinate")
+            return None
+
         i_xgrain = (self.i_xmax - self.i_xmin) / self.i_number_of_cells
         i_ygrain = (self.i_ymax - self.i_ymin) / self.i_number_of_cells
-        x_hilbert = math.floor((x_coord - self.i_xmin) / i_xgrain)
-        y_hilbert = math.floor((y_coord - self.i_ymin) / i_ygrain)
-        return self.sfc.distance_from_coordinates([x_hilbert, y_hilbert])
+        i_tgrain = (self.i_tmax - self.i_tmin) / self.i_number_of_cells
+
+        x_hilbert = max(math.floor((x_coord - self.i_xmin) / i_xgrain), self.i_number_of_cells)
+        y_hilbert = max(math.floor((y_coord - self.i_ymin) / i_ygrain), self.i_number_of_cells)
+        t_hilbert = max(math.floor((t_coord - self.i_tmin) / i_tgrain), self.i_number_of_cells)
+
+        return self.sfc.distance_from_coordinates([x_hilbert, y_hilbert, t_hilbert])
+
 
     def getIndex(self):
         return self.sfc_index
@@ -189,18 +202,20 @@ class Datacube:
             for x_index in range(0, metadata["coverage_x_size"]):
                 for y_index in range(0, metadata["coverage_y_size"]):
 
-                    
+                    t_index = 0
+
                     coords_y = target.coords["x"].item(x_index)
                     coords_x = target.coords["y"].item(y_index)
+                    coords_t = t_index
 
                     if Datacube.config["sfc_index"]:
-                        h = self.getIndexPosition((coords_x, coords_y))
+                        h = self.getIndexPosition((coords_x, coords_y, coords_t))
                     else:
                         h = -1
 
                     if shapely_geometry.Point(coords_y, coords_x).within(domain_shape): #TODO: This will be repeated later, might be redundant, but I don't want to break the code
 
-                        value = target.item((0, y_index, x_index))
+                        value = target.item((t_index, y_index, x_index))
 
                         #
                         # Create atom
@@ -224,7 +239,7 @@ class Datacube:
                             self.sfc_index[h].append(a)
 
                     else:
-                        target[0][y_index][x_index] = numpy.nan
+                        target[t_index][y_index][x_index] = numpy.nan
 
                     if Datacube.config["show_progress"]: 
                         counter += 1                          
