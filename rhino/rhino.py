@@ -45,8 +45,10 @@ class Datacube:
     dataset_metadata = {
         "coverage_x_size": None,
         "coverage_y_size": None,
+        "coverage_t_size": None,
         "coverage_x_grain": None,
         "coverage_y_grain": None
+        "coverage_t_grain": None
     }
 
     neighbourhood = None
